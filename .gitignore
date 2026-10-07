@@ -1,0 +1,9 @@
+.build/
+build/
+dist/
+
+# macOS
+.DS_Store
+
+# Local Claude Code config (per-machine, may reference local paths)
+.claude/settings.local.json
