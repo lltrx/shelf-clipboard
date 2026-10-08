@@ -16,8 +16,12 @@ lipo -create .build/arm64-apple-macosx/release/Shelf .build/x86_64-apple-macosx/
   -output "$APP/Contents/MacOS/Shelf"
 cp Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-# A stable local identity keeps the Accessibility grant across rebuilds; fall back to ad-hoc.
-if security find-identity -p codesigning | grep -q "Shelf Local Signing"; then
+# SHELF_SIGN_IDENTITY (a "Developer ID Application: …" identity) signs for distribution with the
+# hardened runtime and a secure timestamp, as notarization requires. Otherwise a stable local identity
+# keeps the Accessibility grant across rebuilds; fall back to ad-hoc.
+if [ -n "${SHELF_SIGN_IDENTITY:-}" ]; then
+  codesign --force --options runtime --timestamp --sign "$SHELF_SIGN_IDENTITY" "$APP"
+elif security find-identity -p codesigning | grep -q "Shelf Local Signing"; then
   codesign --force --sign "Shelf Local Signing" "$APP"
 else
   codesign --force --sign - "$APP"

@@ -134,6 +134,35 @@ keeps the Accessibility permission across rebuilds and updates, as long as the s
   distribution, sign with an Apple **Developer ID** certificate (paid Apple Developer Program) and
   notarize with `xcrun notarytool`; that requires full Xcode.
 
+### Developer ID and notarization
+
+`build.sh` and `scripts/release.sh` support this already; it turns on when two environment variables
+are set. One-time setup:
+
+1. Join the Apple Developer Program.
+2. In Xcode → Settings → Accounts → Manage Certificates, create a **Developer ID Application**
+   certificate. `security find-identity -p codesigning` then lists it as
+   `Developer ID Application: <Name> (<TEAMID>)`.
+3. Create an app-specific password at account.apple.com, then store notarization credentials in the
+   keychain under a profile name:
+   ```sh
+   xcrun notarytool store-credentials shelf-notary --apple-id <apple-id> --team-id <TEAMID>
+   ```
+
+Then release with:
+
+```sh
+SHELF_SIGN_IDENTITY="Developer ID Application: <Name> (<TEAMID>)" \
+SHELF_NOTARY_PROFILE=shelf-notary \
+scripts/release.sh
+```
+
+`build.sh` signs with the hardened runtime and a secure timestamp; `release.sh` submits the zip,
+waits for Apple, staples the ticket to the app, re-zips it, checks it with `spctl`, and writes release
+notes without the "Open Anyway" instructions. Once releases are notarized, update INSTALL.md to drop
+that step. Switching signing identity changes the app's code requirement, so users have to grant
+Accessibility once more after the first notarized update.
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |
