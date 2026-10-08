@@ -5,7 +5,7 @@ A short description of the change and why.
 Closes #… (if applicable)
 
 **Checklist**
-- [ ] `./build.sh` succeeds locally
+- [ ] `swift test` and `./build.sh` succeed locally
 - [ ] I tested the change by hand (launch, copy, ⇧⌘V, and the feature I touched)
 - [ ] No new third-party dependencies
 - [ ] No network / telemetry / account code added — Shelf stays local-only

@@ -12,13 +12,16 @@ concurrency:
 
 jobs:
   build:
-    name: Build (universal release)
+    name: Test and build
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
       - name: Show toolchain
         run: swift --version
+
+      - name: Run tests
+        run: swift test
 
       - name: Build universal app
         # build.sh builds arm64 + x86_64 and signs ad-hoc when no signing

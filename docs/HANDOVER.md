@@ -24,6 +24,7 @@ shelf_clipboard/
 ├── Resources/AppIcon.icns   App icon (generated)
 ├── scripts/make_icon.swift  Draws the icon and builds the .icns
 ├── docs/                    USER_GUIDE, INSTALL, HANDOVER (this file)
+├── Tests/ShelfTests/        XCTest unit tests: Store, Monitor hashing/links, Backup
 └── Sources/Shelf/
     ├── main.swift           Entry point; accessory activation policy
     ├── App.swift            AppDelegate: panels, keyboard, paste, stack, pinboards, OCR queue, menu bar
@@ -99,6 +100,7 @@ contains passwords and other secrets.
 ./build.sh --install   # build, install to ~/Applications, relaunch
 ./build.sh --package   # build and zip to dist/Shelf-<version>.zip (+ INSTALL.md, USER_GUIDE.md) for sharing
 swift scripts/make_icon.swift   # regenerate Resources/AppIcon.icns after changing the icon
+swift test                      # unit tests (each uses a temp folder, never your real history)
 ```
 
 `build/`, `.build/` and `dist/` are git-ignored.

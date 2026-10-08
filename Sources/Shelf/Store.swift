@@ -57,9 +57,10 @@ final class Store {
     let imagesDir: URL
     private var db: OpaquePointer?
 
-    init() throws {
+    /// `directory` defaults to ~/Library/Application Support/Shelf; tests pass a temporary folder.
+    init(directory: URL? = nil) throws {
         let fm = FileManager.default
-        dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        dir = directory ?? fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Shelf", isDirectory: true)
         imagesDir = dir.appendingPathComponent("images", isDirectory: true)
         let owner: [FileAttributeKey: Any] = [.posixPermissions: 0o700]

@@ -9,6 +9,11 @@ let package = Package(
             name: "Shelf",
             path: "Sources/Shelf",
             linkerSettings: [.linkedLibrary("sqlite3")]
+        ),
+        .testTarget(
+            name: "ShelfTests",
+            dependencies: ["Shelf"],
+            path: "Tests/ShelfTests"
         )
     ]
 )

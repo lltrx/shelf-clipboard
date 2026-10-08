@@ -19,6 +19,7 @@ not required.
 ./build.sh            # build the universal app into build/Shelf.app
 ./build.sh --install  # build, install to ~/Applications/Shelf.app, and launch
 swift build           # faster inner loop while iterating (native arch, debug)
+swift test            # run the unit tests
 ```
 
 See [docs/HANDOVER.md](docs/HANDOVER.md) for the architecture, source layout, and how each file fits
@@ -26,20 +27,25 @@ together — read it before a non-trivial change.
 
 ## Testing a change
 
-There is no automated test suite yet; verify by hand:
+Run `swift test`. The unit tests in `Tests/ShelfTests/` cover the non-UI logic: storage
+(`Store.swift`), dedup hashing and link detection (`Monitor.swift`), and pinboard backups
+(`Backup.swift`). Each test uses its own temporary folder, never your real history in
+`~/Library/Application Support/Shelf`. If you change that logic, add or update a test.
+
+The UI isn't covered by tests, so also check it by hand:
 
 1. `./build.sh --install` and confirm the app launches and the menu bar icon appears.
 2. Copy a few things (text, a link, a file, an image), press **⇧⌘V**, and check they show up.
 3. Exercise whatever your change touches — paste, search, pinboards, the paste stack, OCR, backups.
 
-CI runs `swift build` (release, universal) on every pull request, so make sure the project compiles
-cleanly before you open one.
+CI runs `swift test` and the full universal build on every pull request, so make sure both pass
+before you open one.
 
 ## Pull requests
 
 1. Fork the repo and create a branch off `main`.
 2. Keep each PR focused on one change; describe what and why.
-3. Make sure `./build.sh` succeeds locally.
+3. Make sure `swift test` and `./build.sh` succeed locally.
 4. Open the PR against `main`. A maintainer will review it.
 
 ## Reporting bugs and requesting features

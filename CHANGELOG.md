@@ -6,6 +6,9 @@ All notable changes to Shelf are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- Unit tests for storage, dedup hashing, link detection, and pinboard backups (`swift test`), run in CI.
+
 ## [1.2] - 2026-10-07
 
 First public, open-source release. Shelf is a native macOS clipboard manager (Swift/SwiftUI, no
