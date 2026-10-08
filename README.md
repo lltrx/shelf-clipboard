@@ -3,6 +3,8 @@
 A small native macOS clipboard manager (Swift/SwiftUI, no dependencies) that replaces Paste.
 History never leaves the Mac: no iCloud, no account, no network code.
 
+![Shelf in action: ⇧⌘V opens the shelf over TextEdit, items are pasted, searched, previewed, and a pinboard is opened](docs/images/demo.gif)
+
 ![Shelf open at the bottom of the screen, showing recent copies: a link, code, an image, notes, Arabic text, and files](docs/images/shelf.png)
 
 | Search everything you copied | Full preview (Space) | Pinboards |
