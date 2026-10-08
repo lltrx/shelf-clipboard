@@ -3,6 +3,12 @@
 A small native macOS clipboard manager (Swift/SwiftUI, no dependencies) that replaces Paste.
 History never leaves the Mac: no iCloud, no account, no network code.
 
+![Shelf open at the bottom of the screen, showing recent copies: a link, code, an image, notes, Arabic text, and files](docs/images/shelf.png)
+
+| Search everything you copied | Full preview (Space) | Pinboards |
+|---|---|---|
+| ![Searching for "swift"](docs/images/search.png) | ![Previewing a copied image](docs/images/preview.png) | ![The Snippets pinboard](docs/images/pinboards.png) |
+
 - [User guide](docs/USER_GUIDE.md): every feature and shortcut
 - [Install guide](docs/INSTALL.md): for other people, including updating and uninstalling
 - [Maintainer handover](docs/HANDOVER.md): architecture, data, build, signing, releasing
