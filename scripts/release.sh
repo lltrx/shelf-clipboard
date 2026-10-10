@@ -52,6 +52,12 @@ if git rev-parse "$TAG" >/dev/null 2>&1; then
   exit 1
 fi
 
+# This version's section of CHANGELOG.md (between its heading and the next one), for the release notes.
+CHANGES=$(awk -v v="$VERSION" '
+  index($0, "## [" v "]") == 1 { on = 1; next }
+  on && /^## \[/ { exit }
+  on { print }' CHANGELOG.md)
+
 git tag "$TAG"
 git push origin "$TAG"
 
@@ -60,7 +66,9 @@ gh release create "$TAG" \
   docs/INSTALL.md \
   docs/USER_GUIDE.md \
   --title "Shelf $VERSION" \
-  --notes "See INSTALL.md to install. Shelf is local-only: it never sends your clipboard anywhere.
+  --notes "$CHANGES
+
+See INSTALL.md to install. Shelf is local-only: it never sends your clipboard anywhere.
 
 $NOTES_GATEKEEPER"
 

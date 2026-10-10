@@ -6,8 +6,17 @@ All notable changes to Shelf are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-10
+
+### Fixed
+- Releases are signed with a stable certificate again. 1.2 was ad-hoc signed, so macOS asked for
+  Accessibility permission again after every update. **When updating from 1.2, grant Accessibility one
+  last time:** in System Settings → Privacy & Security → Accessibility, remove Shelf with **−**, then
+  allow it when Shelf asks. Later updates keep the permission.
+
 ### Added
 - Unit tests for storage, dedup hashing, link detection, and pinboard backups (`swift test`), run in CI.
+- Optional Developer ID signing and notarization in the release script (for maintainers).
 
 ## [1.2] - 2026-10-07
 
@@ -25,5 +34,6 @@ dependencies) that keeps your clipboard history entirely on your Mac.
 - Local only: no network code, no account, no iCloud. History is stored with `600`/`700` file
   permissions and never leaves the Mac.
 
-[Unreleased]: https://github.com/lltrx/shelf-clipboard/compare/v1.2...HEAD
+[Unreleased]: https://github.com/lltrx/shelf-clipboard/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/lltrx/shelf-clipboard/compare/v1.2...v1.2.1
 [1.2]: https://github.com/lltrx/shelf-clipboard/releases/tag/v1.2
