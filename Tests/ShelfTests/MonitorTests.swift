@@ -24,6 +24,15 @@ final class MonitorTests: XCTestCase {
         XCTAssertNil(Monitor.skipReason([]))
     }
 
+    func testCopiesFromPasswordManagersAreConcealedEvenWhenUnmarked() {
+        // Plain text with no concealed marker, copied while a password manager is frontmost.
+        XCTAssertEqual(Monitor.skipReason([.string], from: "com.apple.Passwords"), .concealed)
+        XCTAssertEqual(Monitor.skipReason([.string], from: "com.apple.keychainaccess"), .concealed)
+        XCTAssertEqual(Monitor.skipReason([.string], from: "com.1password.1password"), .concealed)
+        XCTAssertNil(Monitor.skipReason([.string], from: "com.apple.Notes"))
+        XCTAssertNil(Monitor.skipReason([.string], from: nil))
+    }
+
     func testIsLink() {
         XCTAssertTrue(Monitor.isLink("https://example.com"))
         XCTAssertTrue(Monitor.isLink("  http://example.com/path?q=1\n"))

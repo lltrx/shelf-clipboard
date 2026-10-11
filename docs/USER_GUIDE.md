@@ -92,7 +92,8 @@ Click the clipboard icon in the menu bar for:
 - Everything stays in `~/Library/Application Support/Shelf/` on your Mac, readable only by your account.
 - **Passwords from password managers are not recorded.** 1Password, Bitwarden, Apple Passwords and
   similar apps mark the passwords they copy as concealed; Shelf skips those. ⌘V still pastes them as
-  usual, and while one is on the clipboard the shelf shows "Password copied · not saved to history".
+  usual. While one is on the clipboard, the first card in History is a 🔒 **Password** card (the
+  password itself is never shown); Return on it pastes the password.
 - **Everything else you copy is recorded**, including passwords you copy from ordinary text. Use
   **Pause Capture** before copying something sensitive, or delete the card afterwards with ⌘⌫.
 - History is kept for **30 days**. Pinned cards are kept forever.

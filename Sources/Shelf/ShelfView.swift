@@ -29,7 +29,7 @@ final class ShelfModel: ObservableObject {
     @Published var now = Date()
     @Published var focusTick = 0
     @Published var stack: [Int64] = []          // item ids queued for paste stack, in order
-    @Published var passwordOnClipboard = false  // a concealed copy (not recorded) is on the clipboard
+    @Published var password: ClipItem?          // placeholder card for a password on the clipboard
     @Published var previewing = false
     @Published var editing = false
     @Published var naming: Naming?
@@ -42,7 +42,11 @@ final class ShelfModel: ObservableObject {
     var filtered: [ClipItem] {
         let base = tab.map { board in items.filter { $0.board == board } } ?? items
         let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return base }
+        guard !q.isEmpty else {
+            // A password on the clipboard is the most recent copy, so it leads History.
+            if tab == nil, let password { return [password] + base }
+            return base
+        }
         return base.filter {
             ($0.text?.localizedCaseInsensitiveContains(q) ?? false) ||
                 ($0.ocr?.localizedCaseInsensitiveContains(q) ?? false) ||
@@ -73,6 +77,7 @@ final class ShelfModel: ObservableObject {
     }
 
     func toggleStack(_ item: ClipItem) {
+        guard !item.concealed else { return }
         if let i = stack.firstIndex(of: item.id) { stack.remove(at: i) } else { stack.append(item.id) }
     }
 
@@ -193,6 +198,14 @@ struct ShelfView: View {
     }
 
     @ViewBuilder private func menu(_ item: ClipItem, _ index: Int) -> some View {
+        if item.concealed {
+            Button("Paste") { model.actions?.paste(item, plain: false) }
+        } else {
+            itemMenu(item, index)
+        }
+    }
+
+    @ViewBuilder private func itemMenu(_ item: ClipItem, _ index: Int) -> some View {
         Button("Paste") { model.actions?.paste(item, plain: false) }
         if item.formatted {
             Button("Paste as Plain Text") { model.actions?.paste(item, plain: true) }
@@ -223,10 +236,8 @@ struct ShelfView: View {
         if !model.stack.isEmpty {
             return "\(model.stack.count) in stack · Return pastes in order"
         }
-        if model.passwordOnClipboard {
-            return "Password copied · not saved to history · ⌘V pastes it"
-        }
-        return list.count == 1 ? "1 item" : "\(list.count) items"
+        let count = list.filter { !$0.concealed }.count
+        return count == 1 ? "1 item" : "\(count) items"
     }
 
     private var emptyText: String {
@@ -266,7 +277,7 @@ struct CardView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.kind.title).font(.system(size: 12, weight: .semibold))
+                    Text(item.concealed ? "Password" : item.kind.title).font(.system(size: 12, weight: .semibold))
                     Text(relativeTime).font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -308,6 +319,22 @@ struct CardView: View {
     }
 
     @ViewBuilder private var content: some View {
+        if item.concealed {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.fill").font(.system(size: 15)).foregroundStyle(.secondary)
+                    Text("••••••••••").font(.system(size: 16, weight: .medium)).foregroundStyle(.secondary)
+                }
+                Text("Not saved to history").font(.system(size: 12, weight: .medium))
+                Text("It's on the clipboard until you copy something else.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+        } else {
+            kindContent
+        }
+    }
+
+    @ViewBuilder private var kindContent: some View {
         switch item.kind {
         case .text:
             Text(String((item.text ?? "").prefix(800)))
@@ -332,6 +359,7 @@ struct CardView: View {
     }
 
     private var footer: String {
+        if item.concealed { return "Return or ⌘V pastes it" }
         switch item.kind {
         case .text:
             let n = item.text?.count ?? 0
@@ -394,7 +422,10 @@ struct PreviewView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let item = model.selected {
+            if model.selected?.concealed == true {
+                Text("Passwords aren't shown or saved. Return or ⌘V pastes it.")
+                    .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let item = model.selected {
                 HStack(spacing: 10) {
                     if let icon = AppIcons.icon(for: item.sourceBundle) {
                         Image(nsImage: icon).resizable().frame(width: 26, height: 26)

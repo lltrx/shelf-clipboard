@@ -26,9 +26,17 @@ struct ClipItem: Identifiable, Equatable {
     var board: Int64?          // pinboard id; pinned items never expire
     var formatted: Bool        // has rich-text representations stored
     var ocr: String?           // text recognized in images (nil = not processed yet)
+    var concealed = false      // placeholder for a password on the clipboard; never stored
 
     var pinned: Bool { board != nil }
-    var editable: Bool { kind == .text || kind == .link }
+    var editable: Bool { !concealed && (kind == .text || kind == .link) }
+
+    /// The card shown while a password manager's copy is on the clipboard. It holds no text: pasting it
+    /// sends ⌘V for what's already on the clipboard.
+    static func concealedPlaceholder(_ copy: Monitor.ConcealedCopy) -> ClipItem {
+        ClipItem(id: -1, kind: .text, text: nil, image: nil, detail: nil, sourceBundle: copy.sourceBundle,
+                 sourceName: nil, created: copy.date, board: nil, formatted: false, ocr: nil, concealed: true)
+    }
     var filePaths: [String] { kind == .file ? (text ?? "").split(separator: "\n").map(String.init) : [] }
 }
 

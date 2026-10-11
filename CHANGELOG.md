@@ -6,10 +6,15 @@ All notable changes to Shelf are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-11
+
 ### Changed
-- Passwords copied from password managers (copies marked concealed, `org.nspasteboard.ConcealedType`)
-  are no longer recorded. ⌘V still pastes them, and while one is on the clipboard the shelf shows
-  "Password copied · not saved to history · ⌘V pastes it".
+- Passwords copied from password managers are no longer recorded: copies marked concealed
+  (`org.nspasteboard.ConcealedType`, used by 1Password, Bitwarden and others) and anything copied
+  from Apple's Passwords app or Keychain Access. ⌘V still pastes them as usual.
+- While such a password is on the clipboard, History starts with a 🔒 **Password** card that shows
+  dots instead of the password and says it isn't saved. Return on it pastes the password. It can't be
+  previewed, pinned, edited or stacked, and it disappears once you copy something else.
 
 ## [1.3.0] - 2026-10-11
 
@@ -48,7 +53,8 @@ dependencies) that keeps your clipboard history entirely on your Mac.
 - Local only: no network code, no account, no iCloud. History is stored with `600`/`700` file
   permissions and never leaves the Mac.
 
-[Unreleased]: https://github.com/lltrx/shelf-clipboard/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/lltrx/shelf-clipboard/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/lltrx/shelf-clipboard/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/lltrx/shelf-clipboard/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/lltrx/shelf-clipboard/compare/v1.2...v1.2.1
 [1.2]: https://github.com/lltrx/shelf-clipboard/releases/tag/v1.2

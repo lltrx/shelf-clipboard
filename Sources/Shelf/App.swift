@@ -97,14 +97,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
         monitor.onCapture = { [unowned self] capture in
             if stackActive { endStack() } // you copied something new; the stack is over
-            model.passwordOnClipboard = false
+            model.password = nil
             store.upsert(capture)
             reload()
             if capture.kind == .image { runOCR() }
         }
         monitor.onConcealed = { [unowned self] in
             if stackActive { endStack() }
-            model.passwordOnClipboard = true
+            model.password = monitor.concealedOnClipboard.map(ClipItem.concealedPlaceholder)
         }
         monitor.start()
 
@@ -214,7 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         model.selection = 0
         model.stack = []
         model.naming = nil
-        model.passwordOnClipboard = monitor.passwordOnClipboard
+        model.password = monitor.concealedOnClipboard.map(ClipItem.concealedPlaceholder)
         model.now = Date()
         reload()
         panel.makeKeyAndOrderFront(nil)
@@ -242,6 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     // MARK: - Preview and editing
 
     func togglePreview() {
+        if !model.previewing, model.selected?.concealed == true { return }
         model.previewing.toggle()
         guard model.previewing, let screen = panel.screen else {
             endEditing()
@@ -305,13 +306,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     func imageURL(_ item: ClipItem) -> URL? { store.imageURL(item) }
 
     func setBoard(_ item: ClipItem, _ board: Int64?) {
+        guard !item.concealed else { return }
         store.setBoard(item.id, board)
         reload()
     }
 
     /// ⌘P: unpin a pinned item; otherwise pin it, asking which board when there are several.
     private func requestPin() {
-        guard let item = model.selected else { return }
+        guard let item = model.selected, !item.concealed else { return }
         if item.pinned { setBoard(item, nil); return }
         if model.boards.isEmpty { model.pendingPin = item.id; model.startNaming(.new); return }
         if model.boards.count == 1 { setBoard(item, model.boards[0].id); return }
@@ -395,17 +397,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     }
 
     func paste(_ item: ClipItem, plain: Bool) {
+        if item.concealed {           // the password is already on the clipboard; just paste it
+            hide()
+            postPaste()
+            return
+        }
         write(item, plain: plain)
         hide()
         postPaste()
     }
 
     func copy(_ item: ClipItem) {
+        guard !item.concealed else { hide(); return }   // already on the clipboard
         write(item)
         hide()
     }
 
     func delete(_ item: ClipItem) {
+        guard !item.concealed else { return }
         store.delete(item.id)
         reload()
     }
