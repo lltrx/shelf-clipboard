@@ -1,19 +1,15 @@
 #!/bin/zsh
 # Cut a GitHub release for the current version in Info.plist.
 #
-# Run this on the maintainer's Mac (the one with the "Shelf Local Signing"
-# certificate) so the published app is signed the same way as every other
-# build and macOS keeps the Accessibility grant across updates. CI can't do
-# this — it has no access to the signing key — which is why releases are
-# published by hand.
+# Run this on the maintainer's Mac: it needs the signing identity and, for notarization, the
+# notarytool credentials, neither of which CI has.
 #
 # Prerequisites: gh (authenticated), a clean build, and the version already
 # bumped in Info.plist (CFBundleShortVersionString + CFBundleVersion).
 #
-# Optional, with an Apple Developer ID (see docs/HANDOVER.md, "Developer ID and notarization"):
-#   SHELF_SIGN_IDENTITY="Developer ID Application: Name (TEAMID)"  sign for distribution
-#   SHELF_NOTARY_PROFILE=shelf-notary                              notarize and staple
-# Without them the release is signed with Shelf Local Signing, as before.
+# When build.sh signs with a Developer ID (found in the keychain, or SHELF_SIGN_IDENTITY), the release
+# is notarized with the notarytool profile SHELF_NOTARY_PROFILE (default "shelf-notary"); see
+# docs/HANDOVER.md, "Code signing". Without a Developer ID it is signed with Shelf Local Signing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -22,6 +18,11 @@ TAG="v$VERSION"
 ZIP="dist/Shelf-$VERSION.zip"
 
 echo "Preparing release $TAG"
+
+if git rev-parse "$TAG" >/dev/null 2>&1; then
+  echo "error: tag $TAG already exists — bump the version in Info.plist first" >&2
+  exit 1
+fi
 
 # Build + package the signed, universal app into dist/.
 ./build.sh --package
@@ -32,13 +33,16 @@ if [ ! -f "$ZIP" ]; then
 fi
 
 NOTES_GATEKEEPER="Because Shelf is signed with a self-signed certificate (not an Apple Developer ID), macOS will ask you to approve it once via System Settings → Privacy & Security → Open Anyway. See INSTALL.md for the steps."
-if [ -n "${SHELF_NOTARY_PROFILE:-}" ]; then
-  if [ -z "${SHELF_SIGN_IDENTITY:-}" ]; then
-    echo "error: SHELF_NOTARY_PROFILE needs SHELF_SIGN_IDENTITY (a Developer ID Application identity)" >&2
+if codesign -dv --verbose=2 build/Shelf.app 2>&1 | grep -q "^Authority=Developer ID Application"; then
+  PROFILE="${SHELF_NOTARY_PROFILE:-shelf-notary}"
+  echo "Notarizing $ZIP with profile $PROFILE (this can take a few minutes)"
+  # --wait exits 0 even when Apple rejects the upload, so check the status explicitly.
+  RESULT=$(xcrun notarytool submit "$ZIP" --keychain-profile "$PROFILE" --wait)
+  echo "$RESULT"
+  if ! echo "$RESULT" | grep -q "status: Accepted"; then
+    echo "error: notarization was not accepted; see: xcrun notarytool log <id> --keychain-profile $PROFILE" >&2
     exit 1
   fi
-  echo "Notarizing $ZIP (this can take a few minutes)"
-  xcrun notarytool submit "$ZIP" --keychain-profile "$SHELF_NOTARY_PROFILE" --wait
   # Staple the ticket so Gatekeeper can verify the app offline, then re-zip the stapled app.
   xcrun stapler staple build/Shelf.app
   rm -f "$ZIP"
@@ -47,10 +51,6 @@ if [ -n "${SHELF_NOTARY_PROFILE:-}" ]; then
   NOTES_GATEKEEPER="Shelf is signed with an Apple Developer ID and notarized, so it opens normally."
 fi
 
-if git rev-parse "$TAG" >/dev/null 2>&1; then
-  echo "error: tag $TAG already exists — bump the version in Info.plist first" >&2
-  exit 1
-fi
 
 # This version's section of CHANGELOG.md (between its heading and the next one), for the release notes.
 CHANGES=$(awk -v v="$VERSION" '

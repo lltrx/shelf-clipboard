@@ -109,59 +109,47 @@ swift test                      # unit tests (each uses a temp folder, never you
 1. Bump `CFBundleShortVersionString` (and `CFBundleVersion`) in `Info.plist`.
 2. `./build.sh --install` and check the change works on your Mac.
 3. Commit the version bump and push to `main`.
-4. `scripts/release.sh` — builds + packages the signed universal app, tags `v<version>`, pushes the
-   tag, and creates the GitHub release with the zip, INSTALL.md and USER_GUIDE.md attached. Requires
-   `gh` authenticated as a maintainer.
+4. `scripts/release.sh` — builds and packages the signed universal app, notarizes it (Developer ID
+   builds), tags `v<version>`, pushes the tag, and creates the GitHub release with the zip,
+   INSTALL.md and USER_GUIDE.md attached. The release notes start with this version's CHANGELOG
+   section. Requires `gh` authenticated as a maintainer.
 
-Run the release from the Mac that holds the **Shelf Local Signing** certificate so the published app
-is signed the same way as local builds. CI (`.github/workflows/ci.yml`) only build-checks pull
-requests — it has no signing key and does not publish releases. For a quick local-only zip without
-publishing, `./build.sh --package` still writes `dist/Shelf-<version>.zip`.
+Run releases from the maintainer's Mac: it holds the signing identity and the notarization
+credentials. CI (`.github/workflows/ci.yml`) only tests and build-checks pull requests; it has no
+signing key and does not publish releases. For a local zip without publishing,
+`./build.sh --package` still writes `dist/Shelf-<version>.zip`.
 
 ### Code signing
 
-Builds are signed with **Shelf Local Signing**, a self-signed certificate in the maintainer's login
-keychain (valid to 2036). The app's designated requirement is the certificate's leaf hash, so macOS
-keeps the Accessibility permission across rebuilds and updates, as long as the same certificate signs them.
+`build.sh` picks the first available identity:
 
-- If the certificate is missing (another Mac, new keychain), `build.sh` falls back to ad-hoc signing.
-  The app works, but Accessibility has to be granted again after every rebuild.
-- Keep the certificate private. Don't export it or share the private key; anyone holding it can sign
-  apps that macOS treats as Shelf.
-- If macOS asks whether `codesign` may use the key, choose **Always Allow**.
-- The certificate is not trusted by Apple, so Gatekeeper treats shared copies like any app from an
-  unidentified developer (the **Open Anyway** step in INSTALL.md). To avoid that for wider
-  distribution, sign with an Apple **Developer ID** certificate (paid Apple Developer Program) and
-  notarize with `xcrun notarytool`; that requires full Xcode.
+1. **Developer ID** — `SHELF_SIGN_IDENTITY`, or the first `Developer ID Application: …` identity in the
+   keychain (currently `Developer ID Application: Turki almutairi (C66782F7SB)`). Signed with the
+   hardened runtime; `--package` adds a secure timestamp, which notarization requires.
+2. **Shelf Local Signing** — a self-signed certificate, for Macs without the Developer ID (see
+   "Recreating the Shelf Local Signing certificate" below). Not trusted by Apple, so copies shared from it need
+   **Open Anyway**.
+3. **Ad-hoc** — works, but macOS asks for Accessibility again after every rebuild.
 
-### Developer ID and notarization
+macOS ties the Accessibility permission to the signing identity, so keep using the same one. Changing
+identity (for example Shelf Local Signing → Developer ID in 1.3.0) means every Mac grants Accessibility
+once more.
 
-`build.sh` and `scripts/release.sh` support this already; it turns on when two environment variables
-are set. One-time setup:
+**Notarization.** When the build is signed with a Developer ID, `release.sh` submits the zip to Apple
+with the notarytool profile `SHELF_NOTARY_PROFILE` (default `shelf-notary`), stops if Apple doesn't
+accept it, staples the ticket to the app, re-zips it and checks it with `spctl`. One-time setup on a
+new Mac:
 
-1. Join the Apple Developer Program.
-2. In Xcode → Settings → Accounts → Manage Certificates, create a **Developer ID Application**
-   certificate. `security find-identity -p codesigning` then lists it as
-   `Developer ID Application: <Name> (<TEAMID>)`.
-3. Create an app-specific password at account.apple.com, then store notarization credentials in the
-   keychain under a profile name:
+1. Xcode → Settings → Accounts → (team) → Manage Certificates → **+** → **Developer ID Application**.
+   Only the team's Account Holder can create it; `security find-identity -v -p codesigning` lists it.
+2. Create an app-specific password at account.apple.com → Sign-In and Security, then:
    ```sh
-   xcrun notarytool store-credentials shelf-notary --apple-id <apple-id> --team-id <TEAMID>
+   xcrun notarytool store-credentials shelf-notary --apple-id <apple-id> --team-id C66782F7SB
    ```
 
-Then release with:
-
-```sh
-SHELF_SIGN_IDENTITY="Developer ID Application: <Name> (<TEAMID>)" \
-SHELF_NOTARY_PROFILE=shelf-notary \
-scripts/release.sh
-```
-
-`build.sh` signs with the hardened runtime and a secure timestamp; `release.sh` submits the zip,
-waits for Apple, staples the ticket to the app, re-zips it, checks it with `spctl`, and writes release
-notes without the "Open Anyway" instructions. Once releases are notarized, update INSTALL.md to drop
-that step. Switching signing identity changes the app's code requirement, so users have to grant
-Accessibility once more after the first notarized update.
+Keep the Developer ID certificate's private key private and backed up (Keychain Access → export as
+`.p12`, store it in a password manager); anyone holding it can sign apps as you.
+If macOS asks whether `codesign` may use a key, choose **Always Allow**.
 
 ## Troubleshooting
 
@@ -173,7 +161,7 @@ Accessibility once more after the first notarized update.
 | Build hangs at `codesign` | A keychain prompt is waiting on screen. Choose **Always Allow**. |
 | Searching a fresh screenshot finds nothing | OCR runs in the background; give it a few seconds. |
 
-Recreating the signing certificate (only if lost):
+Recreating the Shelf Local Signing certificate (only for Macs without the Developer ID):
 
 ```sh
 T=$(mktemp -d) && cd "$T"
@@ -194,7 +182,6 @@ A new certificate is a new identity: every Mac has to grant Accessibility once m
 - Text over 2 million characters and formats over 10 MB are not recorded.
 - History is not backed up (pinboards are).
 - No ignore list: every app's copies are recorded unless capture is paused.
-- Not notarized (see Code signing).
 
 ## Ideas not yet built
 

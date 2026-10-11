@@ -58,7 +58,8 @@ version, whether you're on Apple Silicon or Intel, and clear steps to reproduce.
 
 ## A note on releases
 
-Official release builds are signed with the maintainer's local signing certificate so that macOS keeps
-the Accessibility permission across updates. CI can't reproduce that signature, so release downloads
-are published by the maintainer rather than built automatically. See
+Official release builds are signed with the maintainer's Apple Developer ID and notarized by Apple.
+CI has neither the signing key nor the notarization credentials, so release downloads are published
+by the maintainer rather than built automatically. Your own builds are signed locally (or ad-hoc),
+which is fine for development. See
 [docs/HANDOVER.md](docs/HANDOVER.md) for the full release process.

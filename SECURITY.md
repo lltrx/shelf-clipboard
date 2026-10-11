@@ -36,8 +36,8 @@ describes the threat model and how to report a vulnerability.
   directly regardless of Shelf).
 - The absence of at-rest encryption, which is a documented design choice above (feature requests
   welcome as issues, not security reports).
-- The self-signed code-signing certificate and the resulting Gatekeeper "Open Anyway" prompt — this is
-  expected for a non-notarized app (see [docs/INSTALL.md](docs/INSTALL.md)).
+- The "Open Anyway" prompt on versions 1.2 and 1.2.1, which weren't notarized. Releases from 1.3 are
+  signed with an Apple Developer ID and notarized.
 
 ## Reporting a vulnerability
 

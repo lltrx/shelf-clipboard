@@ -11,12 +11,10 @@ Download the latest `Shelf-<version>.zip` from the
 
 1. Double-click the zip to unpack **Shelf.app**.
 2. Move **Shelf.app** to your **Applications** folder.
-3. Open it. The first time, macOS blocks it, because Shelf is not distributed through the App Store
-   or signed by a registered Apple developer:
-   - Click **Done** (or **OK**) on the warning.
-   - Open **System Settings → Privacy & Security**, scroll down to the message about Shelf, and click
-     **Open Anyway**. Confirm with your password or Touch ID.
-   - You only need to do this once.
+3. Open it. macOS asks whether you want to open an app downloaded from the internet; click **Open**.
+   Shelf is signed with an Apple Developer ID and checked by Apple (notarized), so nothing else is
+   needed. (Versions 1.2 and 1.2.1 weren't notarized and needed **Open Anyway** in System Settings →
+   Privacy & Security.)
 4. A clipboard icon appears in the menu bar. Shelf has no Dock icon; that is normal.
 5. Click the menu bar icon and turn on **Launch at Login**.
 6. Copy something, press **⇧⌘V**, and press **Return** on a card. macOS asks for **Accessibility**
@@ -26,12 +24,11 @@ Download the latest `Shelf-<version>.zip` from the
 Done. See the user guide (USER_GUIDE.md) for all shortcuts.
 
 > **Work-managed Macs:** if your Mac is managed by your company (for example with Jamf), the
-> **Open Anyway** button or the Accessibility switch may be blocked by policy. Ask your IT team to
-> allow the app, or use Option B.
+> Accessibility switch may be blocked by policy. Ask your IT team to allow Shelf.
 
 ## Option B: build it yourself from source
 
-For people comfortable with Terminal. Building on your own Mac also avoids the "Open Anyway" step.
+For people comfortable with Terminal.
 
 1. Install Apple's command line tools (skip if you already have them):
    ```sh
@@ -53,6 +50,10 @@ Accessibility again; if so, remove Shelf from the Accessibility list with **−*
 
 Quit Shelf (menu bar icon → **Quit Shelf**), replace **Shelf.app** with the new version, and open it.
 Your history and pinboards are kept, because they are stored separately from the app.
+
+**Updating from 1.2 or 1.2.1 to 1.3 or later:** Shelf's signature changed to an Apple Developer ID, so
+macOS asks for Accessibility once more. In **System Settings → Privacy & Security → Accessibility**,
+select Shelf, click **−**, then paste once and allow it again. Later updates keep the permission.
 
 ## Changing the shortcut
 

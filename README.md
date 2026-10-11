@@ -19,8 +19,8 @@ History never leaves the Mac: no iCloud, no account, no network code.
 
 **Download a release (recommended):** grab the latest `Shelf-<version>.zip` from the
 [Releases page](https://github.com/lltrx/shelf-clipboard/releases), then follow the
-[Install guide](docs/INSTALL.md). Shelf isn't signed by a registered Apple developer, so the first
-launch needs a one-time **Open Anyway** in System Settings → Privacy & Security.
+[Install guide](docs/INSTALL.md). Shelf is signed with an Apple Developer ID and notarized by Apple,
+so it opens like any other downloaded app.
 
 **Or build from source:**
 
@@ -37,8 +37,9 @@ scripts/release.sh            # package and publish a GitHub release (maintainer
 swift scripts/make_icon.swift # only if you change the icon
 ```
 
-Builds are signed with the local self-signed identity **Shelf Local Signing** (login keychain), so the
-Accessibility permission survives rebuilds. Without it, build.sh falls back to ad-hoc signing.
+build.sh signs with the maintainer's Developer ID when it's in the keychain (releases are also
+notarized), otherwise with a local **Shelf Local Signing** identity, otherwise ad-hoc. See
+[docs/HANDOVER.md](docs/HANDOVER.md#code-signing).
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Keys (while the shelf is open)

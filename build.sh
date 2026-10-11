@@ -16,11 +16,16 @@ lipo -create .build/arm64-apple-macosx/release/Shelf .build/x86_64-apple-macosx/
   -output "$APP/Contents/MacOS/Shelf"
 cp Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-# SHELF_SIGN_IDENTITY (a "Developer ID Application: …" identity) signs for distribution with the
-# hardened runtime and a secure timestamp, as notarization requires. Otherwise a stable local identity
-# keeps the Accessibility grant across rebuilds; fall back to ad-hoc.
-if [ -n "${SHELF_SIGN_IDENTITY:-}" ]; then
-  codesign --force --options runtime --timestamp --sign "$SHELF_SIGN_IDENTITY" "$APP"
+# Signing, in order of preference:
+# 1. A Developer ID (SHELF_SIGN_IDENTITY, or the first "Developer ID Application" identity in the
+#    keychain): hardened runtime, as notarization requires. --package adds a secure timestamp.
+# 2. The self-signed "Shelf Local Signing" identity, which keeps the Accessibility grant across rebuilds.
+# 3. Ad-hoc.
+IDENTITY="${SHELF_SIGN_IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)}"
+if [ -n "$IDENTITY" ]; then
+  TIMESTAMP=--timestamp=none
+  [ "${1:-}" = --package ] && TIMESTAMP=--timestamp
+  codesign --force --options runtime "$TIMESTAMP" --sign "$IDENTITY" "$APP"
 elif security find-identity -p codesigning | grep -q "Shelf Local Signing"; then
   codesign --force --sign "Shelf Local Signing" "$APP"
 else

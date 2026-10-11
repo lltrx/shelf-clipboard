@@ -6,6 +6,15 @@ All notable changes to Shelf are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-11
+
+### Changed
+- Shelf is now signed with an Apple Developer ID and notarized by Apple, so it opens like any other
+  downloaded app — no more **Open Anyway** in System Settings.
+- **When updating from 1.2 or 1.2.1, grant Accessibility once more:** in System Settings → Privacy &
+  Security → Accessibility, select Shelf, click **−**, then paste once and allow it. Later updates keep
+  the permission.
+
 ## [1.2.1] - 2026-10-10
 
 ### Fixed
@@ -34,6 +43,7 @@ dependencies) that keeps your clipboard history entirely on your Mac.
 - Local only: no network code, no account, no iCloud. History is stored with `600`/`700` file
   permissions and never leaves the Mac.
 
-[Unreleased]: https://github.com/lltrx/shelf-clipboard/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/lltrx/shelf-clipboard/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/lltrx/shelf-clipboard/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/lltrx/shelf-clipboard/compare/v1.2...v1.2.1
 [1.2]: https://github.com/lltrx/shelf-clipboard/releases/tag/v1.2
