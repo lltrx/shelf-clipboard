@@ -29,6 +29,7 @@ final class ShelfModel: ObservableObject {
     @Published var now = Date()
     @Published var focusTick = 0
     @Published var stack: [Int64] = []          // item ids queued for paste stack, in order
+    @Published var passwordOnClipboard = false  // a concealed copy (not recorded) is on the clipboard
     @Published var previewing = false
     @Published var editing = false
     @Published var naming: Naming?
@@ -221,6 +222,9 @@ struct ShelfView: View {
     private func status(_ list: [ClipItem]) -> String {
         if !model.stack.isEmpty {
             return "\(model.stack.count) in stack · Return pastes in order"
+        }
+        if model.passwordOnClipboard {
+            return "Password copied · not saved to history · ⌘V pastes it"
         }
         return list.count == 1 ? "1 item" : "\(list.count) items"
     }

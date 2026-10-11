@@ -181,7 +181,7 @@ A new certificate is a new identity: every Mac has to grant Accessibility once m
   formulas) are not, so a few details may not carry over.
 - Text over 2 million characters and formats over 10 MB are not recorded.
 - History is not backed up (pinboards are).
-- No ignore list: every app's copies are recorded unless capture is paused.
+- No ignore list: every app's copies are recorded unless capture is paused (concealed copies from password managers excepted).
 
 ## Ideas not yet built
 

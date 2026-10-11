@@ -84,6 +84,7 @@ Only pinboards move this way. History expires after 30 days anyway.
 
 ## Privacy
 
-Shelf has no network code and no account. It records everything you copy, **including passwords**,
-in a database on your Mac that only your user account can read. Use **Pause Capture** in the menu bar
-before copying something you don't want kept.
+Shelf has no network code and no account. It records what you copy in a database on your Mac that only
+your user account can read. Passwords copied from password managers are skipped; anything else,
+**including a password you copy from ordinary text**, is recorded. Use **Pause Capture** in the menu
+bar before copying something you don't want kept.

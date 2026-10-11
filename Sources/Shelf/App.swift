@@ -97,9 +97,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
         monitor.onCapture = { [unowned self] capture in
             if stackActive { endStack() } // you copied something new; the stack is over
+            model.passwordOnClipboard = false
             store.upsert(capture)
             reload()
             if capture.kind == .image { runOCR() }
+        }
+        monitor.onConcealed = { [unowned self] in
+            if stackActive { endStack() }
+            model.passwordOnClipboard = true
         }
         monitor.start()
 
@@ -209,6 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         model.selection = 0
         model.stack = []
         model.naming = nil
+        model.passwordOnClipboard = monitor.passwordOnClipboard
         model.now = Date()
         reload()
         panel.makeKeyAndOrderFront(nil)

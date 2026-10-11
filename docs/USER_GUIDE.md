@@ -90,8 +90,11 @@ Click the clipboard icon in the menu bar for:
 ## Privacy and storage
 
 - Everything stays in `~/Library/Application Support/Shelf/` on your Mac, readable only by your account.
-- **Everything you copy is recorded, including passwords.** Use **Pause Capture** before copying
-  something sensitive, or delete the card afterwards with ⌘⌫.
+- **Passwords from password managers are not recorded.** 1Password, Bitwarden, Apple Passwords and
+  similar apps mark the passwords they copy as concealed; Shelf skips those. ⌘V still pastes them as
+  usual, and while one is on the clipboard the shelf shows "Password copied · not saved to history".
+- **Everything else you copy is recorded**, including passwords you copy from ordinary text. Use
+  **Pause Capture** before copying something sensitive, or delete the card afterwards with ⌘⌫.
 - History is kept for **30 days**. Pinned cards are kept forever.
 - Pinboards are backed up automatically once a day to the `Backups` folder (last 7 days kept).
 - Exported pinboard files can contain secrets. Keep them somewhere private, not in shared or cloud folders.

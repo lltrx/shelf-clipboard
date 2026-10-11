@@ -81,7 +81,9 @@ defaults write com.turkifaisal.shelf hotkey "cmd+option+v"
 - Unpinned items are deleted after 30 days; pinned items never expire.
 - Text keeps RTF / HTML / RTFD formatting (up to 10 MB each). Edited text is saved as a new item.
 - Screenshot text is recognized on-device with Apple Vision (English and Arabic) in the background.
-- Everything is captured, including passwords. Use **Pause Capture** or **Clear Unpinned History…** from the menu bar.
+- Passwords copied from password managers (marked concealed) are not recorded; ⌘V still pastes them.
+  Everything else is captured, including passwords copied from ordinary text. Use **Pause Capture** or
+  **Clear Unpinned History…** from the menu bar.
 
 ## Backups
 

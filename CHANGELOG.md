@@ -6,6 +6,11 @@ All notable changes to Shelf are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- Passwords copied from password managers (copies marked concealed, `org.nspasteboard.ConcealedType`)
+  are no longer recorded. ⌘V still pastes them, and while one is on the clipboard the shelf shows
+  "Password copied · not saved to history · ⌘V pastes it".
+
 ## [1.3.0] - 2026-10-11
 
 ### Changed

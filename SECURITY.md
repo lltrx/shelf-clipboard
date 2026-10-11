@@ -1,6 +1,6 @@
 # Security Policy
 
-Shelf is a clipboard manager, so by design it stores **everything you copy — including passwords,
+Shelf is a clipboard manager, so by design it stores **what you copy — which can include passwords,
 tokens, and other secrets** — on your Mac. Security is therefore central to the project. This document
 describes the threat model and how to report a vulnerability.
 
@@ -15,8 +15,10 @@ describes the threat model and how to report a vulnerability.
 - **No encryption at rest.** The database is not separately encrypted; it relies on macOS file
   permissions and your account's protection (FileVault, if enabled). Anyone with read access to your
   user account, or an unlocked unencrypted disk, can read your history.
-- **Secrets are captured by default.** Copying a password puts it in the history like anything else.
-  Use **Pause Capture** before copying sensitive data, or **Clear Unpinned History…** afterward.
+- **Concealed copies are skipped.** Copies marked `org.nspasteboard.ConcealedType` (what password
+  managers use) are never written to history. Other secrets — a password copied from a text file or a
+  terminal, an API token — are recorded like anything else. Use **Pause Capture** before copying
+  sensitive data, or **Clear Unpinned History…** afterward.
 - **Exports may contain secrets.** Exported pinboard files embed formatting and images and may contain
   passwords. Keep them somewhere private — not in shared folders, iCloud Drive, or a public repo.
 - **Accessibility permission.** Shelf requests macOS Accessibility only to synthesize the paste
