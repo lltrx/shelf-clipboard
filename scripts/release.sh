@@ -75,3 +75,15 @@ See INSTALL.md to install. Shelf is local-only: it never sends your clipboard an
 $NOTES_GATEKEEPER"
 
 echo "Published $TAG with $ZIP"
+
+# Keep the Homebrew cask (github.com/lltrx/homebrew-tap) in step: new version and checksum.
+CASK_API=repos/lltrx/homebrew-tap/contents/Casks/shelf-clipboard.rb
+SHA=$(shasum -a 256 "$ZIP" | cut -d' ' -f1)
+if CASK=$(gh api "$CASK_API" --jq .content | base64 -d) && [ -n "$CASK" ]; then
+  NEW_CASK=$(printf '%s\n' "$CASK" | sed -E "s/^  version \".*\"/  version \"$VERSION\"/; s/^  sha256 \".*\"/  sha256 \"$SHA\"/")
+  gh api -X PUT "$CASK_API" -f message="shelf-clipboard $VERSION" \
+    -f content="$(printf '%s\n' "$NEW_CASK" | base64)" -f sha="$(gh api "$CASK_API" --jq .sha)" >/dev/null
+  echo "Updated Homebrew cask to $VERSION"
+else
+  echo "warning: couldn't read the Homebrew cask; update version and sha256 in lltrx/homebrew-tap by hand" >&2
+fi

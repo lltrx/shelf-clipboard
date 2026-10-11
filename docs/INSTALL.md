@@ -4,6 +4,17 @@ Shelf is a free, local-only clipboard history app for macOS. Everything you copy
 
 **Requirements:** macOS 14 Sonoma or later, on Apple Silicon or Intel.
 
+## With Homebrew
+
+If you use [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask lltrx/tap/shelf-clipboard
+```
+
+This installs Shelf.app into Applications; continue from step 3 below. Update later with
+`brew upgrade --cask shelf-clipboard`.
+
 ## Option A: install the app (recommended)
 
 Download the latest `Shelf-<version>.zip` from the

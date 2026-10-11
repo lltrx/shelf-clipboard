@@ -17,7 +17,13 @@ History never leaves the Mac: no iCloud, no account, no network code.
 
 ## Install
 
-**Download a release (recommended):** grab the latest `Shelf-<version>.zip` from the
+**With Homebrew:**
+
+```sh
+brew install --cask lltrx/tap/shelf-clipboard
+```
+
+**Or download a release:** grab the latest `Shelf-<version>.zip` from the
 [Releases page](https://github.com/lltrx/shelf-clipboard/releases), then follow the
 [Install guide](docs/INSTALL.md). Shelf is signed with an Apple Developer ID and notarized by Apple,
 so it opens like any other downloaded app.

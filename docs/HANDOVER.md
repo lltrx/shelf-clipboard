@@ -112,7 +112,9 @@ swift test                      # unit tests (each uses a temp folder, never you
 4. `scripts/release.sh` — builds and packages the signed universal app, notarizes it (Developer ID
    builds), tags `v<version>`, pushes the tag, and creates the GitHub release with the zip,
    INSTALL.md and USER_GUIDE.md attached. The release notes start with this version's CHANGELOG
-   section. Requires `gh` authenticated as a maintainer.
+   section. Finally it updates the Homebrew cask in
+   [lltrx/homebrew-tap](https://github.com/lltrx/homebrew-tap) (`Casks/shelf-clipboard.rb`) to the new
+   version and checksum. Requires `gh` authenticated as a maintainer.
 
 Run releases from the maintainer's Mac: it holds the signing identity and the notarization
 credentials. CI (`.github/workflows/ci.yml`) only tests and build-checks pull requests; it has no
