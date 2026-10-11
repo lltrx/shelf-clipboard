@@ -33,13 +33,15 @@ if [ ! -f "$ZIP" ]; then
 fi
 
 NOTES_GATEKEEPER="Because Shelf is signed with a self-signed certificate (not an Apple Developer ID), macOS will ask you to approve it once via System Settings → Privacy & Security → Open Anyway. See INSTALL.md for the steps."
-if codesign -dv --verbose=2 build/Shelf.app 2>&1 | grep -q "^Authority=Developer ID Application"; then
+# Capture first: piping into grep -q would let codesign die of SIGPIPE, which pipefail treats as failure.
+SIGNATURE=$(codesign -dv --verbose=2 build/Shelf.app 2>&1)
+if [[ "$SIGNATURE" == *"Authority=Developer ID Application"* ]]; then
   PROFILE="${SHELF_NOTARY_PROFILE:-shelf-notary}"
   echo "Notarizing $ZIP with profile $PROFILE (this can take a few minutes)"
   # --wait exits 0 even when Apple rejects the upload, so check the status explicitly.
   RESULT=$(xcrun notarytool submit "$ZIP" --keychain-profile "$PROFILE" --wait)
   echo "$RESULT"
-  if ! echo "$RESULT" | grep -q "status: Accepted"; then
+  if [[ "$RESULT" != *"status: Accepted"* ]]; then
     echo "error: notarization was not accepted; see: xcrun notarytool log <id> --keychain-profile $PROFILE" >&2
     exit 1
   fi
