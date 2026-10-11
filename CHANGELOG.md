@@ -6,6 +6,14 @@ All notable changes to Shelf are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-11
+
+### Added
+- **Ignored Apps:** never record copies from apps you choose. Right-click a card → **Don't Record
+  Copies from <app>**, or menu bar icon → **Ignored Apps** → **Add App…**; click an app there to
+  record it again.
+- Install with Homebrew: `brew install --cask lltrx/tap/shelf-clipboard`.
+
 ## [1.3.1] - 2026-10-11
 
 ### Changed
@@ -53,7 +61,8 @@ dependencies) that keeps your clipboard history entirely on your Mac.
 - Local only: no network code, no account, no iCloud. History is stored with `600`/`700` file
   permissions and never leaves the Mac.
 
-[Unreleased]: https://github.com/lltrx/shelf-clipboard/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/lltrx/shelf-clipboard/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/lltrx/shelf-clipboard/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/lltrx/shelf-clipboard/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/lltrx/shelf-clipboard/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/lltrx/shelf-clipboard/compare/v1.2...v1.2.1

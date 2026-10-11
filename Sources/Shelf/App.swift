@@ -1,5 +1,6 @@
 import AppKit
 import ServiceManagement
+import UniformTypeIdentifiers
 import SwiftUI
 
 /// Borderless panel that takes keyboard focus without activating Shelf,
@@ -102,6 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             reload()
             if capture.kind == .image { runOCR() }
         }
+        monitor.ignoredApps = Set(ignoredApps)
         monitor.onConcealed = { [unowned self] in
             if stackActive { endStack() }
             model.password = monitor.concealedOnClipboard.map(ClipItem.concealedPlaceholder)
@@ -564,6 +566,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
         let pause = menu.addItem(withTitle: "Pause Capture", action: #selector(togglePause), keyEquivalent: "")
         pause.state = monitor.paused ? .on : .off
+        let ignored = menu.addItem(withTitle: "Ignored Apps", action: nil, keyEquivalent: "")
+        menu.setSubmenu(ignoredAppsMenu(), for: ignored)
         let login = menu.addItem(withTitle: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         if !AXIsProcessTrusted() {
@@ -588,6 +592,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     @objc private func endStackFromMenu() { endStack() }
 
     @objc private func togglePause() { monitor.paused.toggle() }
+
+    // MARK: - Ignored apps
+
+    /// Bundle ids whose copies are never recorded, in the order they were added.
+    private var ignoredApps: [String] {
+        get { UserDefaults.standard.stringArray(forKey: "ignoredApps") ?? [] }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "ignoredApps")
+            monitor.ignoredApps = Set(newValue)
+        }
+    }
+
+    func ignoreApp(_ item: ClipItem) {
+        guard let bundle = item.sourceBundle, !ignoredApps.contains(bundle) else { return }
+        ignoredApps.append(bundle)
+    }
+
+    private func ignoredAppsMenu() -> NSMenu {
+        let menu = NSMenu()
+        if ignoredApps.isEmpty {
+            menu.addItem(withTitle: "No ignored apps", action: nil, keyEquivalent: "").isEnabled = false
+        }
+        for bundle in ignoredApps {
+            let item = NSMenuItem(title: Self.appName(bundle), action: #selector(stopIgnoring(_:)), keyEquivalent: "")
+            item.representedObject = bundle
+            item.state = .on
+            item.toolTip = "Click to record copies from this app again"
+            item.target = self
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        let add = menu.addItem(withTitle: "Add App…", action: #selector(addIgnoredApp), keyEquivalent: "")
+        add.target = self
+        let note = menu.addItem(withTitle: "Password managers are always skipped", action: nil, keyEquivalent: "")
+        note.isEnabled = false
+        return menu
+    }
+
+    @objc private func stopIgnoring(_ sender: NSMenuItem) {
+        guard let bundle = sender.representedObject as? String else { return }
+        ignoredApps.removeAll { $0 == bundle }
+    }
+
+    @objc private func addIgnoredApp() {
+        NSApp.activate()
+        let open = NSOpenPanel()
+        open.allowedContentTypes = [.application]
+        open.directoryURL = URL(fileURLWithPath: "/Applications")
+        open.prompt = "Ignore"
+        open.message = "Shelf won't record anything copied in this app."
+        guard open.runModal() == .OK, let url = open.url,
+              let bundle = Bundle(url: url)?.bundleIdentifier, !ignoredApps.contains(bundle) else { return }
+        ignoredApps.append(bundle)
+    }
+
+    static func appName(_ bundle: String) -> String {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { return bundle }
+        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+    }
 
     @objc private func toggleLogin() {
         do {

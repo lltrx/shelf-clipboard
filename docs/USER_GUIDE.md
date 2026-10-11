@@ -94,6 +94,9 @@ Click the clipboard icon in the menu bar for:
   similar apps mark the passwords they copy as concealed; Shelf skips those. ⌘V still pastes them as
   usual. While one is on the clipboard, the first card in History is a 🔒 **Password** card (the
   password itself is never shown); Return on it pastes the password.
+- **Ignore apps you never want recorded.** Right-click a card → **Don't Record Copies from <app>**, or
+  menu bar icon → **Ignored Apps** → **Add App…**. Click an app in that list to record it again.
+  Cards already in History stay until you delete them (⌘⌫).
 - **Everything else you copy is recorded**, including passwords you copy from ordinary text. Use
   **Pause Capture** before copying something sensitive, or delete the card afterwards with ⌘⌫.
 - History is kept for **30 days**. Pinned cards are kept forever.

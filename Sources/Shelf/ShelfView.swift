@@ -13,6 +13,7 @@ protocol ShelfActions: AnyObject {
     func edit(_ item: ClipItem)
     func commitName()
     func deleteBoard(_ board: Board)
+    func ignoreApp(_ item: ClipItem)
 }
 
 enum Naming: Equatable {
@@ -229,6 +230,9 @@ struct ShelfView: View {
             Button("Unpin") { model.actions?.setBoard(item, nil) }
         }
         Divider()
+        if item.sourceBundle != nil {
+            Button("Don't Record Copies from \(item.sourceName ?? "This App")") { model.actions?.ignoreApp(item) }
+        }
         Button("Delete") { model.actions?.delete(item) }
     }
 

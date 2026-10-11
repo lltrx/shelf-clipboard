@@ -89,6 +89,7 @@ defaults write com.turkifaisal.shelf hotkey "cmd+option+v"
 - Screenshot text is recognized on-device with Apple Vision (English and Arabic) in the background.
 - Passwords copied from password managers are not recorded; ⌘V still pastes them, and a 🔒 card
   in the shelf shows one is on the clipboard.
+  Apps you add to **Ignored Apps** (menu bar, or right-click a card) are never recorded.
   Everything else is captured, including passwords copied from ordinary text. Use **Pause Capture** or
   **Clear Unpinned History…** from the menu bar.
 

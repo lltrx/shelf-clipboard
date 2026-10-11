@@ -33,6 +33,16 @@ final class MonitorTests: XCTestCase {
         XCTAssertNil(Monitor.skipReason([.string], from: nil))
     }
 
+    func testIgnoredAppsAreSkipped() {
+        let ignored: Set<String> = ["com.tinyspeck.slackmacgap"]
+        XCTAssertEqual(Monitor.skipReason([.string], from: "com.tinyspeck.slackmacgap", ignoring: ignored), .ignored)
+        XCTAssertNil(Monitor.skipReason([.string], from: "com.apple.Notes", ignoring: ignored))
+        XCTAssertNil(Monitor.skipReason([.string], from: nil, ignoring: ignored))
+        // A password manager on the ignore list still gets the password card.
+        XCTAssertEqual(Monitor.skipReason([.string], from: "com.apple.Passwords", ignoring: ["com.apple.Passwords"]),
+                       .concealed)
+    }
+
     func testIsLink() {
         XCTAssertTrue(Monitor.isLink("https://example.com"))
         XCTAssertTrue(Monitor.isLink("  http://example.com/path?q=1\n"))
