@@ -14,6 +14,7 @@ protocol ShelfActions: AnyObject {
     func commitName()
     func deleteBoard(_ board: Board)
     func ignoreApp(_ item: ClipItem)
+    func showMenu()
 }
 
 enum Naming: Equatable {
@@ -111,11 +112,21 @@ struct ShelfView: View {
                 Spacer()
                 tabs
                 Spacer()
-                Text(status(list))
-                    .font(.system(size: 11))
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    Text(status(list))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    // The menu bar menu, also here: crowded menu bars can hide Shelf's icon.
+                    Button { model.actions?.showMenu() } label: {
+                        Image(systemName: "ellipsis.circle").font(.system(size: 14)).frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(width: 280, alignment: .trailing)
+                    .help("Shelf menu (⌘,)")
+                }
+                .frame(width: 280, alignment: .trailing)
             }
             .padding(.horizontal, 22)
 

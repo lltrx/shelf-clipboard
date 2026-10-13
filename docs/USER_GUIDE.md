@@ -79,7 +79,9 @@ appears in a screenshot finds it. Image cards with recognized text say "Contains
 
 ## Menu bar
 
-Click the clipboard icon in the menu bar for:
+Click the clipboard icon in the menu bar, or the **⋯** button at the top right of the shelf (⌘,),
+for the menu below. The ⋯ button is handy when your menu bar is crowded: on Macs with a notch, macOS
+hides menu bar icons that don't fit, and Shelf's may be one of them.
 
 - **Pause Capture:** stop recording copies until you turn it back on.
 - **Launch at Login:** start Shelf automatically.
@@ -111,4 +113,4 @@ Click the clipboard icon in the menu bar for:
 | macOS keeps asking for Accessibility although Shelf is on | The entry belongs to an older copy. Select Shelf in that list, click **−**, then paste once and allow it again. |
 | ⇧⌘V does nothing | Another app owns the shortcut (often Paste). Quit it, then quit and reopen Shelf. To use a different shortcut, see "Changing the shortcut" in INSTALL.md. |
 | A copy is missing | Capture may be paused (menu bar), or the app marked the copy as temporary, which Shelf respects. |
-| Shelf isn't running after a restart | Turn on **Launch at Login** in the menu bar menu. |
+| Shelf isn't running after a restart | Turn on **Launch at Login** in the Shelf menu (⋯ in the shelf, or the menu bar icon). |

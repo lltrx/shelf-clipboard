@@ -6,6 +6,13 @@ All notable changes to Shelf are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-13
+
+### Added
+- The Shelf menu is also inside the shelf: the **⋯** button at the top right, or **⌘,**. On crowded
+  menu bars (especially on Macs with a notch) macOS can hide Shelf's menu bar icon, which left Pause
+  Capture, Ignored Apps and Launch at Login out of reach.
+
 ## [1.4.0] - 2026-10-11
 
 ### Added
@@ -61,7 +68,8 @@ dependencies) that keeps your clipboard history entirely on your Mac.
 - Local only: no network code, no account, no iCloud. History is stored with `600`/`700` file
   permissions and never leaves the Mac.
 
-[Unreleased]: https://github.com/lltrx/shelf-clipboard/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/lltrx/shelf-clipboard/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/lltrx/shelf-clipboard/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/lltrx/shelf-clipboard/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/lltrx/shelf-clipboard/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/lltrx/shelf-clipboard/compare/v1.2.1...v1.3.0

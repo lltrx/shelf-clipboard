@@ -175,6 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         case 35: requestPin(); return true                                  // P
         case 8 where model.query.isEmpty: model.selected.map(copy); return true // C
         case 45: model.startNaming(.new); return true                       // N
+        case 43: showMenu(); return true                                    // , (Shelf menu)
         case 1:                                                             // S: add to stack, move on
             if let item = model.selected { model.toggleStack(item); model.move(1) }
             return true
@@ -581,6 +582,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Shelf", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         for item in menu.items where item.action != #selector(NSApplication.terminate(_:)) { item.target = self }
+    }
+
+    /// The menu bar menu, shown from the shelf's ⋯ button or ⌘, (for when the menu bar icon is hidden).
+    func showMenu() {
+        guard let view = panel.contentView else { return }
+        let menu = NSMenu()
+        menuNeedsUpdate(menu)
+        // "Open Shelf" and its separator make no sense from inside the shelf.
+        if menu.items.first?.action == #selector(openFromMenu) {
+            menu.removeItem(at: 0)
+            if menu.items.first?.isSeparatorItem == true { menu.removeItem(at: 0) }
+        }
+        menu.popUp(positioning: nil, at: NSPoint(x: view.bounds.maxX - 40, y: view.bounds.maxY - 34), in: view)
     }
 
     @objc private func openFromMenu() {

@@ -68,6 +68,7 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 | Return (with stack) | Paste stack: pastes item 1, then each ⌘V you press pastes the next |
 | ⌥Return (with stack) | Paste all stacked items at once, one per line |
 | ⌘⌫ | Delete item |
+| ⌘, or ⋯ (top right) | Shelf menu: Pause Capture, Ignored Apps, Launch at Login, export… |
 | Esc | Close preview, then the shelf |
 
 Right-click a card for the same actions; right-click a pinboard tab to rename or delete it
