@@ -36,6 +36,7 @@ final class ShelfModel: ObservableObject {
     @Published var editing = false
     @Published var naming: Naming?
     @Published var nameDraft = ""
+    @Published var plainByDefault = false       // Return pastes plain text; ⇧ adds the formatting back
 
     weak var actions: ShelfActions?
     weak var editor: NSTextView?
@@ -193,7 +194,7 @@ struct ShelfView: View {
                                  stackPosition: model.stack.firstIndex(of: item.id).map { $0 + 1 },
                                  imageURL: model.actions?.imageURL(item))
                             .id(item.id)
-                            .onTapGesture(count: 2) { model.actions?.paste(item, plain: false) }
+                            .onTapGesture(count: 2) { model.actions?.paste(item, plain: model.plainByDefault) }
                             .onTapGesture { model.selection = index }
                             .contextMenu { menu(item, index) }
                     }
@@ -218,9 +219,11 @@ struct ShelfView: View {
     }
 
     @ViewBuilder private func itemMenu(_ item: ClipItem, _ index: Int) -> some View {
-        Button("Paste") { model.actions?.paste(item, plain: false) }
+        Button("Paste") { model.actions?.paste(item, plain: model.plainByDefault) }
         if item.formatted {
-            Button("Paste as Plain Text") { model.actions?.paste(item, plain: true) }
+            Button(model.plainByDefault ? "Paste with Formatting" : "Paste as Plain Text") {
+                model.actions?.paste(item, plain: !model.plainByDefault)
+            }
         }
         Button("Copy") { model.actions?.copy(item) }
         Divider()
@@ -510,7 +513,9 @@ struct PreviewView: View {
     }
 
     private func hint(_ item: ClipItem) -> String {
-        if model.editing { return "⌘Return paste · ⇧⌘Return plain · Esc cancel" }
+        if model.editing {
+            return "⌘Return paste · ⇧⌘Return \(model.plainByDefault ? "formatted" : "plain") · Esc cancel"
+        }
         return item.editable ? "⌘E edit · Space close" : "Space close"
     }
 }

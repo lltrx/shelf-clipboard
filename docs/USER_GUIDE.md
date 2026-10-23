@@ -43,6 +43,11 @@ Right-click any card for the same actions with the mouse.
 Text copied from Word, Outlook, Notes or a browser keeps its fonts, bold, links and tables.
 **Return** pastes it formatted, **⇧Return** pastes plain text. Formatted cards say "Formatted" at the bottom.
 
+If you mostly want plain text (for example when copying cells from Excel, which brings fonts, colors
+and table borders along), turn on **Paste as Plain Text by Default** in the Shelf menu (menu bar icon,
+or **⋯** / **⌘,** in the shelf). Then Return, ⌘1…9 and double-click paste plain text, and ⇧ adds the
+formatting back. Cells copied from a spreadsheet paste as text separated by tabs, one row per line.
+
 ## Pinboards
 
 Pinned cards never expire. Group them into named pinboards, such as "Code commands" or "Email replies".

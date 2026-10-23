@@ -6,6 +6,12 @@ All notable changes to Shelf are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-23
+
+### Added
+- **Paste as Plain Text by Default** in the Shelf menu. When it is on, Return, ⌘1…9 and double-click
+  paste without fonts, colors or tables (handy for Excel and web pages), and ⇧ pastes with formatting.
+
 ## [1.4.1] - 2026-10-13
 
 ### Added
@@ -68,7 +74,8 @@ dependencies) that keeps your clipboard history entirely on your Mac.
 - Local only: no network code, no account, no iCloud. History is stored with `600`/`700` file
   permissions and never leaves the Mac.
 
-[Unreleased]: https://github.com/lltrx/shelf-clipboard/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/lltrx/shelf-clipboard/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/lltrx/shelf-clipboard/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/lltrx/shelf-clipboard/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/lltrx/shelf-clipboard/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/lltrx/shelf-clipboard/compare/v1.3.0...v1.3.1

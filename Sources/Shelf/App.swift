@@ -89,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             return
         }
         model.actions = self
+        model.plainByDefault = UserDefaults.standard.bool(forKey: "pastePlainByDefault")
 
         setUpPanels()
         setUpStatusItem()
@@ -145,6 +146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     private func handleKey(_ e: NSEvent) -> Bool {
         let cmd = e.modifierFlags.contains(.command)
         let shift = e.modifierFlags.contains(.shift)
+        let plain = shift != model.plainByDefault                       // ⇧ flips the default
 
         if model.naming != nil {                                         // typing a pinboard name
             if e.keyCode == 53 { model.naming = nil; model.pendingPin = nil; return true }
@@ -155,11 +157,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         case 53: model.previewing ? togglePreview() : hide(); return true   // esc
         case 123: model.move(cmd ? -1_000_000 : -1); return true            // ←
         case 124: model.move(cmd ? 1_000_000 : 1); return true              // →
-        case 36, 76:                                                        // return (⇧ plain, ⌥ stack as one)
+        case 36, 76:                                                        // return (⇧ flips plain, ⌥ stack as one)
             if !model.stack.isEmpty {
-                e.modifierFlags.contains(.option) ? pasteStackJoined() : startStack(plain: shift)
+                e.modifierFlags.contains(.option) ? pasteStackJoined() : startStack(plain: plain)
             } else {
-                model.selected.map { paste($0, plain: shift) }
+                model.selected.map { paste($0, plain: plain) }
             }
             return true
         case 48: model.cycleTab(shift ? -1 : 1); return true                // tab
@@ -183,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         case let k where digitKeys.contains(k):
             let list = model.filtered
             let i = digitKeys.firstIndex(of: k)!
-            if list.indices.contains(i) { paste(list[i], plain: shift) }
+            if list.indices.contains(i) { paste(list[i], plain: plain) }
             return true
         default: return false
         }
@@ -196,7 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         case 53: endEditing(); return true
         case 36, 76:
             guard e.modifierFlags.contains(.command) else { return false } // plain Return is a newline
-            pasteEdited(plain: e.modifierFlags.contains(.shift))
+            pasteEdited(plain: e.modifierFlags.contains(.shift) != model.plainByDefault)
             return true
         default: return false
         }
@@ -567,6 +569,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
         let pause = menu.addItem(withTitle: "Pause Capture", action: #selector(togglePause), keyEquivalent: "")
         pause.state = monitor.paused ? .on : .off
+        let plain = menu.addItem(withTitle: "Paste as Plain Text by Default", action: #selector(togglePlainByDefault), keyEquivalent: "")
+        plain.state = model.plainByDefault ? .on : .off
+        plain.toolTip = "Return pastes without fonts, colors or tables; ⇧Return keeps the formatting"
         let ignored = menu.addItem(withTitle: "Ignored Apps", action: nil, keyEquivalent: "")
         menu.setSubmenu(ignoredAppsMenu(), for: ignored)
         let login = menu.addItem(withTitle: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
@@ -606,6 +611,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     @objc private func endStackFromMenu() { endStack() }
 
     @objc private func togglePause() { monitor.paused.toggle() }
+
+    @objc private func togglePlainByDefault() {
+        model.plainByDefault.toggle()
+        UserDefaults.standard.set(model.plainByDefault, forKey: "pastePlainByDefault")
+    }
 
     // MARK: - Ignored apps
 
