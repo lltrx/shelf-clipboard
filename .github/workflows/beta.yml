@@ -1,13 +1,16 @@
 name: Beta release
 
-# Pushing a tag such as v1.6.0-beta.1 builds that commit and publishes it as a GitHub pre-release,
-# for the Homebrew cask lltrx/tap/shelf-clipboard@beta. CI has no Developer ID, so beta builds are
-# ad-hoc signed and not notarized (the release notes say what that means for installing).
-# Stable releases still come from scripts/release.sh on the maintainer's Mac.
+# Publishes a test build as a GitHub pre-release, for the Homebrew cask lltrx/tap/shelf-clipboard@beta.
+# Either change .github/beta-version (for example to 1.6.0-beta.2) and push it on any branch, or push
+# a tag such as v1.6.0-beta.2. The commit is tested, built with that version, tagged, and published.
+# CI has no Developer ID, so beta builds are ad-hoc signed and not notarized (the release notes say
+# what that means for installing). Stable releases still come from scripts/release.sh.
 
 on:
   push:
-    tags: ["v*-beta*"]
+    branches: ["**"]
+    paths: [".github/beta-version"]   # branch pushes: only when the version file changes
+    tags: ["v*-beta*"]                # tag pushes always run (paths don't apply to tags)
 
 permissions:
   contents: write
@@ -19,6 +22,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Pick the version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION=$(tr -d '[:space:]' < .github/beta-version)
+          fi
+          case "$VERSION" in
+            *-beta*) ;;
+            *) echo "::error::$VERSION isn't a beta version (like 1.6.0-beta.1)"; exit 1 ;;
+          esac
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "::error::v$VERSION is already released; bump .github/beta-version"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Show toolchain
         run: swift --version
 
@@ -27,11 +49,9 @@ jobs:
 
       - name: Build universal app
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Info.plist
           ./build.sh
           ditto -c -k --keepParent build/Shelf.app "Shelf-$VERSION.zip"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "SHA256=$(shasum -a 256 "Shelf-$VERSION.zip" | cut -d' ' -f1)" >> "$GITHUB_ENV"
 
       - name: Publish pre-release
@@ -61,5 +81,6 @@ jobs:
           SHA-256 of Shelf-$VERSION.zip: $SHA256
           EOF
           } > notes.md
-          gh release create "$GITHUB_REF_NAME" "Shelf-$VERSION.zip" docs/INSTALL.md docs/USER_GUIDE.md \
-            --prerelease --verify-tag --title "Shelf $VERSION (beta)" --notes-file notes.md
+          # Creates the tag on this commit when it doesn't exist yet (version-file pushes).
+          gh release create "v$VERSION" "Shelf-$VERSION.zip" docs/INSTALL.md docs/USER_GUIDE.md \
+            --prerelease --target "$GITHUB_SHA" --title "Shelf $VERSION (beta)" --notes-file notes.md
