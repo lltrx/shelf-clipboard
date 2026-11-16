@@ -149,7 +149,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             return handleKey(event) ? nil : event
         }
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [unowned self] event in
-            if event.window === panel { commandChanged(event.modifierFlags.contains(.command)) }
+            // Releasing ⌘ counts in any of Shelf's panels (⌘E and ⇧⌘C move focus to the preview).
+            if !event.modifierFlags.contains(.command) {
+                commandChanged(false)
+            } else if event.window === panel {
+                commandChanged(true)
+            }
             return event
         }
     }
@@ -691,16 +696,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         draft.busy = true
         draft.error = nil
         model.exportDraft = draft
+        let form = draft.id
         let item = draft.item
         let root = exportsDir
         DispatchQueue.global(qos: .userInitiated).async {
             let result = Result { try FileExport.write(job, in: root) }
-            DispatchQueue.main.async { self.exportFinished(result, action, item: item) }
+            DispatchQueue.main.async { self.exportFinished(result, action, form: form, item: item) }
         }
     }
 
-    private func exportFinished(_ result: Result<[URL], Error>, _ action: ExportAction, item: ClipItem) {
-        guard model.exportDraft?.item.id == item.id else { return }   // the form was closed meanwhile
+    private func exportFinished(_ result: Result<[URL], Error>, _ action: ExportAction, form: UUID, item: ClipItem) {
+        guard model.exportDraft?.id == form else { return }   // that form was closed (or replaced) meanwhile
         switch result {
         case .failure(let error):
             model.exportDraft?.busy = false
@@ -726,6 +732,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     /// Save…: moves the files where you choose (Downloads to start with).
     private func saveExport(_ urls: [URL]) {
         NSApp.activate()
+        // Then step aside, so the app you were in is frontmost again and ⇧⌘V pastes there.
+        defer { NSApp.hide(nil) }
         let fm = FileManager.default
         let downloads = fm.urls(for: .downloadsDirectory, in: .userDomainMask).first
         do {
@@ -735,6 +743,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
                 save.directoryURL = downloads
                 save.canCreateDirectories = true
                 save.isExtensionHidden = false
+                // Keeps the extension matching the contents if the name is changed here.
+                if !file.pathExtension.isEmpty, let type = UTType(filenameExtension: file.pathExtension) {
+                    save.allowedContentTypes = [type]
+                }
                 guard save.runModal() == .OK, let target = save.url else { return }
                 if fm.fileExists(atPath: target.path) {   // the panel already asked about replacing it
                     _ = try fm.replaceItemAt(target, withItemAt: file)

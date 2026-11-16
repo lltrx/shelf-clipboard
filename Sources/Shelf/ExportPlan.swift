@@ -165,6 +165,7 @@ enum ExportAction { case paste, copy, save }
 struct ExportDraft: Equatable {
     enum Source: Equatable { case image, text, files }
 
+    let id = UUID()               // tells this form from one reopened later for the same card
     let item: ClipItem
     let source: Source
     let originals: [String]       // original file names; one made-up name for an image or text card
