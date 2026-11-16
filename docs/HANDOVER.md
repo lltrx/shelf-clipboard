@@ -151,6 +151,13 @@ swift test                      # unit tests (each uses a temp folder, never you
    [lltrx/homebrew-tap](https://github.com/lltrx/homebrew-tap) (`Casks/shelf-clipboard.rb`) to the new
    version and checksum. Requires `gh` authenticated as a maintainer.
 
+**Beta builds** (for testing on another Mac without the source): push a tag like `v1.6.0-beta.1`.
+`.github/workflows/beta.yml` runs the tests, builds the universal app with that version, and publishes
+it as a GitHub pre-release with the checksum in the notes. Then set `version` and `sha256` in
+`Casks/shelf-clipboard@beta.rb` in the tap (`brew install --cask lltrx/tap/shelf-clipboard@beta`). CI
+has no Developer ID, so betas are ad-hoc signed and not notarized: each one needs **Open Anyway** once
+and Accessibility granted again. Stable users aren't affected (pre-releases aren't "latest").
+
 Run releases from the maintainer's Mac: it holds the signing identity and the notarization
 credentials. CI (`.github/workflows/ci.yml`) only tests and build-checks pull requests; it has no
 signing key and does not publish releases. For a local zip without publishing,

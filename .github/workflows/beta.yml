@@ -1,0 +1,65 @@
+name: Beta release
+
+# Pushing a tag such as v1.6.0-beta.1 builds that commit and publishes it as a GitHub pre-release,
+# for the Homebrew cask lltrx/tap/shelf-clipboard@beta. CI has no Developer ID, so beta builds are
+# ad-hoc signed and not notarized (the release notes say what that means for installing).
+# Stable releases still come from scripts/release.sh on the maintainer's Mac.
+
+on:
+  push:
+    tags: ["v*-beta*"]
+
+permissions:
+  contents: write
+
+jobs:
+  beta:
+    name: Build and publish beta
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Run tests
+        run: swift test
+
+      - name: Build universal app
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Info.plist
+          ./build.sh
+          ditto -c -k --keepParent build/Shelf.app "Shelf-$VERSION.zip"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "SHA256=$(shasum -a 256 "Shelf-$VERSION.zip" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+      - name: Publish pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            # What's new: the Unreleased section of the changelog.
+            awk 'index($0, "## [Unreleased]") == 1 { on = 1; next } on && /^## \[/ { exit } on { print }' CHANGELOG.md
+            cat <<EOF
+
+          ---
+
+          **This is a beta for testing.** It was built by GitHub Actions, which doesn't have the Developer ID,
+          so it isn't signed by an identified developer or notarized by Apple:
+
+          - The first time you open it, macOS says it can't check Shelf for malicious software. Click
+            **Done**, open **System Settings → Privacy & Security**, and click **Open Anyway** next to Shelf.
+          - macOS asks for **Accessibility** again. In **System Settings → Privacy & Security →
+            Accessibility**, select Shelf, click **−**, then paste once and allow it. The same happens
+            when you go back to a signed release.
+
+          Your history and pinboards are kept. Install or update with Homebrew:
+
+              brew install --cask lltrx/tap/shelf-clipboard@beta
+
+          SHA-256 of Shelf-$VERSION.zip: $SHA256
+          EOF
+          } > notes.md
+          gh release create "$GITHUB_REF_NAME" "Shelf-$VERSION.zip" docs/INSTALL.md docs/USER_GUIDE.md \
+            --prerelease --verify-tag --title "Shelf $VERSION (beta)" --notes-file notes.md
