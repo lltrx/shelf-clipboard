@@ -55,9 +55,13 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 | ⇧⌘V | Open / close the shelf |
 | type | Search: text, links, file names, source app, and text inside screenshots |
 | ← → (⌘← ⌘→) | Move selection (jump to ends) |
-| Return / double-click | Paste with original formatting |
-| ⇧Return | Paste as plain text |
-| ⌘1 … ⌘9 (⇧ for plain) | Paste item 1–9 |
+| ↑ ↓ | Show only text, links, images or files (or click the icons next to search) |
+| Return / double-click | Paste: with formatting, or as plain text in apps you set that way |
+| ⇧Return | Paste the other way (plain text ↔ with formatting) |
+| ⌘K | **Paste As:** formatted, plain text, Markdown, UPPERCASE / lowercase / Capitalized, trimmed, joined lines, formatted JSON, link without tracking, text in an image, file paths or names |
+| ⇧⌘C | **Copy as File:** name it and pick a format (PNG, JPEG, HEIC, TIFF, GIF, PDF · Plain Text, Markdown, RTF, Word, HTML), then paste, copy (⌘C) or save (⌘S) it |
+| ⌘1 … ⌘9 (⇧ for the other way) | Paste item 1–9 (hold ⌘ to see the numbers and every ⌘ shortcut) |
+| drag a card | Drop it into another app (images become a named PNG file) |
 | Space | Full preview (when the search field is empty) |
 | ⌘E | Edit in the preview, then ⌘Return to paste (⇧⌘Return plain) · Esc cancels |
 | ⌘C | Copy to clipboard without pasting |
@@ -68,8 +72,12 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 | Return (with stack) | Paste stack: pastes item 1, then each ⌘V you press pastes the next |
 | ⌥Return (with stack) | Paste all stacked items at once, one per line |
 | ⌘⌫ | Delete item |
-| ⌘, or ⋯ (top right) | Shelf menu: Pause Capture, Plain Text by Default, Ignored Apps, Launch at Login, export… |
+| ⌘, or ⋯ (top right) | Shelf menu: Pause Capture, Plain Text by Default, Paste Style in Apps, Ignored Apps, Launch at Login, export… |
 | Esc | Close preview, then the shelf |
+
+The bar at the bottom of the shelf shows what the keys do for the selected card. At its right,
+**Excel: Plain Text** (for example) says what Return pastes in the app you're pasting into; click it to
+choose formatted or plain text for that app. Shelf remembers it per app.
 
 Right-click a card for the same actions; right-click a pinboard tab to rename or delete it
 (deleting a pinboard moves its items back to History). A running paste stack shows `n/total` in the
@@ -86,7 +94,10 @@ defaults write com.turkifaisal.shelf hotkey "cmd+option+v"
 - `~/Library/Application Support/Shelf/history.sqlite` (mode 600) and `images/` (PNG files), folder mode 700.
 - Deliberately outside this KB so the auto-commit job never picks up clipboard contents.
 - Unpinned items are deleted after 30 days; pinned items never expire.
-- Text keeps RTF / HTML / RTFD formatting (up to 10 MB each). Edited text is saved as a new item.
+- Text keeps RTF / HTML / RTFD formatting (up to 10 MB each). Edited text is saved as a new item;
+  text changed by Paste As (⌘K) is pasted but not saved.
+- Files made by Copy as File (⇧⌘C) and images dragged out of the shelf are written to `Exports/`
+  and deleted after a day (the app you paste or drop them into keeps its own copy).
 - Screenshot text is recognized on-device with Apple Vision (English and Arabic) in the background.
 - Passwords copied from password managers are not recorded; ⌘V still pastes them, and a 🔒 card
   in the shelf shows one is on the clipboard.

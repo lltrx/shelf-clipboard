@@ -24,11 +24,16 @@ shelf_clipboard/
 ├── Resources/AppIcon.icns   App icon (generated)
 ├── scripts/make_icon.swift  Draws the icon and builds the .icns
 ├── docs/                    USER_GUIDE, INSTALL, HANDOVER (this file)
-├── Tests/ShelfTests/        XCTest unit tests: Store, Monitor hashing/links, Backup
+├── Tests/ShelfTests/        XCTest unit tests: Store, Monitor, Backup, ShelfModel, Paste As, export naming
 └── Sources/Shelf/
     ├── main.swift           Entry point; accessory activation policy
-    ├── App.swift            AppDelegate: panels, keyboard, paste, stack, pinboards, OCR queue, menu bar
-    ├── ShelfView.swift      SwiftUI: ShelfModel, shelf, tabs, cards, preview, rich text view, thumbnails
+    ├── App.swift            AppDelegate: panels, keyboard, paste, Paste As, Copy as File, stack, pinboards,
+    │                        paste style per app, OCR queue, menu bar
+    ├── ShelfView.swift      SwiftUI: ShelfModel, shelf, filters, tabs, cards, bottom bar, preview, thumbnails
+    ├── ExportView.swift     SwiftUI: the Copy as File form (shown in the preview panel)
+    ├── PasteOptions.swift   Paste As options, text transforms, Markdown writer, hex colors (Foundation only)
+    ├── ExportPlan.swift     Copy as File formats, file naming, form state (Foundation only)
+    ├── FileExport.swift     Image conversion (ImageIO), writing exports, pruning the Exports folder
     ├── Store.swift          SQLite storage, data model, schema migration
     ├── Monitor.swift        Pasteboard polling and capture
     ├── HotKey.swift         Global shortcut (Carbon RegisterEventHotKey)
@@ -59,6 +64,28 @@ with `CGEvent` (tagged with `eventSourceUserData` so the paste stack can tell it
 Posting key events requires **Accessibility** permission. Without it, the item is still on the
 clipboard and the user can press ⌘V.
 
+**Paste style per app.** When the shelf opens, the frontmost app is recorded as `model.target` (the
+panel is non-activating, so that's where the paste goes). `model.plainByDefault` is that app's entry in
+the `pasteStyleByApp` default (bundle id → plain), falling back to `pastePlainByDefault`. Choosing the
+same style as the default removes the app's entry.
+
+**Paste As (⌘K).** `PasteOption.sections(for:)` lists the options for a card; the same list feeds the
+⌘K `NSMenu` (one-letter key equivalents with no modifiers) and the right-click submenu, so keep it cheap
+(it runs for every visible card). Text transforms live in `TextTransform` / `TextTools`; Markdown is
+built from the card's attributed string by `AppDelegate.markdown` (bold/italic/monospace from font
+traits, links from `.link`) and `MarkdownWriter`. Transformed text is written to the pasteboard with
+`markOwnChange()`, so it isn't recorded as a new card.
+
+**Copy as File (⇧⌘C).** `startExport` fills an `ExportDraft` (names, formats, what can be converted)
+and shows `ExportView` in the preview panel, which then takes key focus like the editor does.
+`ExportDraft.fileNames` (via `ExportNaming`) decides the final names. On Return / ⌘C / ⌘S, text is
+turned into bytes on the main thread (AppKit's RTF/DOCX/HTML writers), then `FileExport.write` converts
+images (ImageIO thumbnail API with the transform applied; JPEG is flattened onto white; the dpi is
+scaled so the printed size stays the same) or copies files (an APFS clone) into
+`Exports/<uuid>/` on a background queue. The resulting file URLs go on the pasteboard
+(`markOwnChange()`) or are moved to a save panel's location. The form's size estimate encodes the image
+for real, off the main thread, 0.25 s after the settings stop changing.
+
 **Paste stack.** Stacked items are pasted one per ⌘V: Shelf pastes the first, then a global
 key-down monitor watches for the user's ⌘V and, 0.2 s later, puts the next item on the clipboard.
 
@@ -77,7 +104,12 @@ All in `~/Library/Application Support/Shelf/` (folder mode 700, database mode 60
 history.sqlite   SQLite (WAL mode)
 images/          <sha256>.png, one per image card
 Backups/         pinboards-YYYY-MM-DD.json, last 7 kept
+Exports/         <uuid>/<name>: files made by Copy as File and image drags, deleted after a day
 ```
+
+Settings (UserDefaults, `com.turkifaisal.shelf`): `hotkey`, `pastePlainByDefault`, `pasteStyleByApp`
+(bundle id → Bool, true = plain text), `ignoredApps`, and the last Copy as File choices
+`exportImageFormat`, `exportTextFormat`, `exportQuality`.
 
 Schema (`PRAGMA user_version = 2`):
 
@@ -190,4 +222,6 @@ A new certificate is a new identity: every Mac has to grant Accessibility once m
 ## Ideas not yet built
 
 - Combine several cards into one.
-- Quick text actions before pasting: change case, trim whitespace, format JSON, link to Markdown.
+- Drag several files out at once (SwiftUI's `onDrag` carries a single item, so multi-file cards can't be
+  dragged yet; an AppKit `NSDraggingSession` could).
+- Copy as File for a link as a `.webloc`.

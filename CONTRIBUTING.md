@@ -28,8 +28,9 @@ together — read it before a non-trivial change.
 ## Testing a change
 
 Run `swift test`. The unit tests in `Tests/ShelfTests/` cover the non-UI logic: storage
-(`Store.swift`), dedup hashing and link detection (`Monitor.swift`), and pinboard backups
-(`Backup.swift`). Each test uses its own temporary folder, never your real history in
+(`Store.swift`), dedup hashing and link detection (`Monitor.swift`), pinboard backups
+(`Backup.swift`), filtering and paste style (`ShelfModel`), Paste As text changes and Markdown
+(`PasteOptions.swift`), and Copy as File naming (`ExportPlan.swift`). Each test uses its own temporary folder, never your real history in
 `~/Library/Application Support/Shelf`. If you change that logic, add or update a test.
 
 The UI isn't covered by tests, so also check it by hand:

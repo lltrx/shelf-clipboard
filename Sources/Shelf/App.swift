@@ -55,7 +55,7 @@ final class ShelfPanel: NSPanel {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfActions {
     private let retentionDays = 30
-    private let panelHeight: CGFloat = 300
+    private let panelHeight: CGFloat = 312
     /// Tags ⌘V events Shelf posts itself, so the paste stack does not count them as yours.
     private static let syntheticMarker: Int64 = 0x5348_4C46
 
@@ -67,6 +67,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     private var hotKey: HotKey?
     private var statusItem: NSStatusItem!
     private var keyMonitor: Any?
+    private var flagsMonitor: Any?
+    private var commandHold: DispatchWorkItem?   // shows the ⌘ shortcuts once ⌘ has been held a moment
     private var pruneTimer: Timer?
 
     private let ocrQueue = DispatchQueue(label: "shelf.ocr", qos: .utility)
@@ -89,7 +91,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             return
         }
         model.actions = self
-        model.plainByDefault = UserDefaults.standard.bool(forKey: "pastePlainByDefault")
+        model.plainEverywhere = UserDefaults.standard.bool(forKey: "pastePlainByDefault")
+        model.appStyles = appStyles
 
         setUpPanels()
         setUpStatusItem()
@@ -131,15 +134,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         }
         panel.onResignKey = focusCheck
         preview.onResignKey = focusCheck
+        // Clicking back into the shelf ends editing, or closes the Copy as File form.
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: panel, queue: .main) { [unowned self] _ in
             if model.editing { endEditing() }
+            if model.exportDraft != nil { cancelExport() }
         }
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [unowned self] event in
-            if event.window === preview { return handleEditorKey(event) ? nil : event }
+            if event.window === preview {
+                let handled = model.exportDraft != nil ? handleExportKey(event) : handleEditorKey(event)
+                return handled ? nil : event
+            }
             guard event.window === panel else { return event }
             return handleKey(event) ? nil : event
         }
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [unowned self] event in
+            if event.window === panel { commandChanged(event.modifierFlags.contains(.command)) }
+            return event
+        }
+    }
+
+    /// Holding ⌘ for a moment shows ⌘1…⌘9 on the cards and the ⌘ shortcuts at the bottom. The delay
+    /// keeps them from flashing on every ⌘ shortcut, including the ⇧⌘V that opened the shelf.
+    private func commandChanged(_ down: Bool) {
+        commandHold?.cancel()
+        commandHold = nil
+        guard down else {
+            model.commandHeld = false
+            return
+        }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, NSEvent.modifierFlags.contains(.command), self.panel.isKeyWindow else { return }
+            self.model.commandHeld = true
+        }
+        commandHold = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
     }
 
     /// Returns true when the key was handled by the shelf instead of the search field.
@@ -147,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         let cmd = e.modifierFlags.contains(.command)
         let shift = e.modifierFlags.contains(.shift)
         let plain = shift != model.plainByDefault                       // ⇧ flips the default
+        if !cmd && model.commandHeld { commandChanged(false) }           // missed ⌘'s release (e.g. in a menu)
 
         if model.naming != nil {                                         // typing a pinboard name
             if e.keyCode == 53 { model.naming = nil; model.pendingPin = nil; return true }
@@ -157,6 +187,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         case 53: model.previewing ? togglePreview() : hide(); return true   // esc
         case 123: model.move(cmd ? -1_000_000 : -1); return true            // ←
         case 124: model.move(cmd ? 1_000_000 : 1); return true              // →
+        case 125 where !cmd: model.cycleKind(1); return true                // ↓ next kind: Text, Links…
+        case 126 where !cmd: model.cycleKind(-1); return true               // ↑
         case 36, 76:                                                        // return (⇧ flips plain, ⌥ stack as one)
             if !model.stack.isEmpty {
                 e.modifierFlags.contains(.option) ? pasteStackJoined() : startStack(plain: plain)
@@ -175,7 +207,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         guard cmd else { return false }
         switch e.keyCode {
         case 35: requestPin(); return true                                  // P
+        case 8 where shift: model.selected.map(startExport); return true    // ⇧C: Copy as File…
         case 8 where model.query.isEmpty: model.selected.map(copy); return true // C
+        case 40: showPasteMenu(); return true                               // K: Paste As…
         case 45: model.startNaming(.new); return true                       // N
         case 43: showMenu(); return true                                    // , (Shelf menu)
         case 1:                                                             // S: add to stack, move on
@@ -204,6 +238,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         }
     }
 
+    /// Keys in the Copy as File form. Everything else goes to the name field and the controls.
+    private func handleExportKey(_ e: NSEvent) -> Bool {
+        let cmd = e.modifierFlags.contains(.command)
+        switch e.keyCode {
+        case 53: cancelExport(); return true                                // esc
+        case 36, 76: finishExport(.paste); return true                      // return
+        case 8 where cmd: finishExport(.copy); return true                  // ⌘C
+        case 1 where cmd: finishExport(.save); return true                  // ⌘S
+        default: return false
+        }
+    }
+
     private func toggle() {
         panel.isVisible ? hide() : show()
     }
@@ -214,11 +260,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         guard let frame = screen?.visibleFrame else { return }
         panel.setFrame(NSRect(x: frame.minX + 8, y: frame.minY + 8, width: frame.width - 16, height: panelHeight),
                        display: false)
+        // The shelf doesn't take focus from the app you're in, so that's where Return will paste.
+        let front = NSWorkspace.shared.frontmostApplication
+        if let front, let bundle = front.bundleIdentifier, bundle != Bundle.main.bundleIdentifier {
+            model.target = ShelfModel.TargetApp(bundle: bundle, name: front.localizedName ?? Self.appName(bundle))
+        } else {
+            model.target = nil
+        }
         model.query = ""
         model.tab = nil
+        model.kindFilter = nil
         model.selection = 0
         model.stack = []
         model.naming = nil
+        model.exportDraft = nil
+        model.commandHeld = false
         model.password = monitor.concealedOnClipboard.map(ClipItem.concealedPlaceholder)
         model.now = Date()
         reload()
@@ -230,6 +286,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         model.editing = false
         model.previewing = false
         model.naming = nil
+        model.exportDraft = nil
+        commandHold?.cancel()
+        model.commandHeld = false
         preview.allowsKey = false
         preview.orderOut(nil)
         panel.orderOut(nil)
@@ -247,23 +306,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     // MARK: - Preview and editing
 
     func togglePreview() {
+        cancelExport()
         if !model.previewing, model.selected?.concealed == true { return }
         model.previewing.toggle()
-        guard model.previewing, let screen = panel.screen else {
+        guard model.previewing, panel.screen != nil else {
             endEditing()
             preview.orderOut(nil)
             return
         }
-        let vf = screen.visibleFrame
+        placePreview()
+        preview.orderFront(nil)
+    }
+
+    /// The preview's place: centered above the shelf, as tall as the screen allows.
+    private func placePreview() {
+        guard let vf = panel.screen?.visibleFrame else { return }
         let bottom = panel.frame.maxY + 12
         let width = min(920, vf.width * 0.7)
         let height = max(220, min(580, vf.maxY - bottom - 12))
         preview.setFrame(NSRect(x: vf.midX - width / 2, y: bottom, width: width, height: height), display: true)
-        preview.orderFront(nil)
     }
 
     func edit(_ item: ClipItem) {
         guard item.editable else { return }
+        cancelExport()
         if !model.previewing { togglePreview() }
         preview.allowsKey = true
         model.editing = true
@@ -442,6 +508,320 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         }
     }
 
+    // MARK: - Paste As
+
+    /// ⌘K: every way to paste the selected card. A letter picks one while the menu is open.
+    private func showPasteMenu() {
+        guard let item = model.selected, !item.concealed, let view = panel.contentView else { return }
+        let menu = NSMenu()
+        for (i, section) in PasteOption.sections(for: item).enumerated() {
+            if i > 0 { menu.addItem(.separator()) }
+            for option in section {
+                let entry = NSMenuItem(title: option.title, action: #selector(pasteFromMenu(_:)), keyEquivalent: option.key)
+                entry.keyEquivalentModifierMask = []
+                entry.representedObject = PasteChoice(id: item.id, option: option)
+                entry.target = self
+                menu.addItem(entry)
+            }
+        }
+        menu.addItem(.separator())
+        let asFile = NSMenuItem(title: "Copy as File…", action: #selector(exportFromMenu(_:)), keyEquivalent: "e")
+        asFile.keyEquivalentModifierMask = []
+        asFile.representedObject = NSNumber(value: item.id)
+        asFile.target = self
+        menu.addItem(asFile)
+        menu.popUp(positioning: menu.items.first, at: NSPoint(x: view.bounds.midX - 100, y: panelHeight - 44), in: view)
+    }
+
+    private struct PasteChoice {
+        let id: Int64
+        let option: PasteOption
+    }
+
+    @objc private func pasteFromMenu(_ sender: NSMenuItem) {
+        guard let choice = sender.representedObject as? PasteChoice,
+              let item = model.items.first(where: { $0.id == choice.id }) else { return }
+        pasteAs(item, choice.option)
+    }
+
+    @objc private func exportFromMenu(_ sender: NSMenuItem) {
+        guard let id = (sender.representedObject as? NSNumber)?.int64Value,
+              let item = model.items.first(where: { $0.id == id }) else { return }
+        startExport(item)
+    }
+
+    func pasteAs(_ item: ClipItem, _ option: PasteOption) {
+        switch option {
+        case .original, .formatted:
+            paste(item, plain: false)
+        case .plain:
+            paste(item, plain: true)
+        case .markdown:
+            pasteText(markdown(item), from: item)
+        case .transform(let transform):
+            guard let text = transform.apply(item.text ?? "") else { NSSound.beep(); return }
+            pasteText(text, from: item)
+        case .recognizedText:
+            pasteText(item.ocr ?? "", from: item)
+        case .paths:
+            pasteText(item.filePaths.joined(separator: "\n"), from: item)
+        case .names:
+            pasteText(item.filePaths.map { ($0 as NSString).lastPathComponent }.joined(separator: "\n"), from: item)
+        }
+    }
+
+    /// Pastes text made from a card (changed case, Markdown…). It isn't recorded as a new card;
+    /// the card it came from moves to the front, as after any paste.
+    private func pasteText(_ text: String, from item: ClipItem) {
+        guard !text.isEmpty else { NSSound.beep(); return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+        monitor.markOwnChange()
+        store.touch(item.id)
+        reload()
+        hide()
+        postPaste()
+    }
+
+    /// Formatted text as Markdown, for Paste as Markdown and .md files.
+    private func markdown(_ item: ClipItem) -> String {
+        let rich = attributed(item)
+        let string = rich.string as NSString
+        var runs: [StyledRun] = []
+        rich.enumerateAttributes(in: NSRange(location: 0, length: rich.length), options: []) { attributes, range, _ in
+            let font = attributes[.font] as? NSFont
+            let traits = font?.fontDescriptor.symbolicTraits ?? []
+            var link: String?
+            if let url = attributes[.link] as? URL {
+                link = url.absoluteString
+            } else if let text = attributes[.link] as? String {
+                link = text
+            }
+            runs.append(StyledRun(string.substring(with: range), bold: traits.contains(.bold), italic: traits.contains(.italic),
+                                  code: traits.contains(.monoSpace) || font?.isFixedPitch == true, link: link))
+        }
+        return MarkdownWriter.markdown(runs)
+    }
+
+    // MARK: - Copy as File
+
+    /// Files made by Copy as File and by dragging images out. Deleted after a day.
+    private var exportsDir: URL { store.dir.appendingPathComponent("Exports", isDirectory: true) }
+
+    /// ⇧⌘C: opens the Copy as File form above the shelf, with a name and format to start from.
+    func startExport(_ item: ClipItem) {
+        guard !item.concealed else { return }
+        endEditing()
+        let defaults = UserDefaults.standard
+        var draft: ExportDraft
+        switch item.kind {
+        case .image:
+            let name = ExportNaming.timestampName("Image", item.created)
+            let formats = FileExport.writableImageFormats
+            let saved = ExportFormat(rawValue: defaults.string(forKey: "exportImageFormat") ?? "")
+            draft = ExportDraft(item: item, source: .image, originals: [name + ".png"], convertible: [true],
+                                formats: formats, name: name,
+                                format: saved.flatMap { formats.contains($0) ? $0 : nil } ?? .png)
+        case .text, .link:
+            let name = ExportNaming.suggestedName(forText: item.text ?? "") ?? ExportNaming.timestampName("Text", item.created)
+            let saved = ExportFormat(rawValue: defaults.string(forKey: "exportTextFormat") ?? "")
+            draft = ExportDraft(item: item, source: .text, originals: [name + ".txt"], convertible: [true],
+                                formats: ExportFormat.text, name: name,
+                                format: saved.flatMap { ExportFormat.text.contains($0) ? $0 : nil } ?? .txt)
+        case .file:
+            let paths = item.filePaths
+            let names = paths.map { ($0 as NSString).lastPathComponent }
+            let convertible = paths.map(FileExport.isImage)
+            let imageFormats = convertible.contains(true) ? FileExport.writableImageFormats : []
+            draft = ExportDraft(item: item, source: .files, originals: names, convertible: convertible,
+                                formats: [ExportFormat.original] + imageFormats,
+                                name: names.count == 1 ? ExportNaming.splitExtension(names[0]).stem : "",
+                                format: .original)
+        }
+        if defaults.object(forKey: "exportQuality") != nil {
+            draft.quality = min(max(defaults.double(forKey: "exportQuality"), 0.1), 1)
+        }
+        model.exportDraft = draft
+        showExportForm()
+    }
+
+    private func showExportForm() {
+        guard let vf = panel.screen?.visibleFrame else { return }
+        let width = min(720, vf.width * 0.7)
+        let height = min(320, max(240, vf.maxY - panel.frame.maxY - 24))
+        preview.setFrame(NSRect(x: vf.midX - width / 2, y: panel.frame.maxY + 12, width: width, height: height), display: true)
+        preview.allowsKey = true
+        preview.orderFront(nil)
+        preview.makeKey()
+    }
+
+    /// Esc, Cancel, or clicking back into the shelf: back to the cards (and the preview, if it was open).
+    func cancelExport() {
+        guard model.exportDraft != nil else { return }
+        model.exportDraft = nil
+        preview.allowsKey = false
+        if model.previewing { placePreview() } else { preview.orderOut(nil) }
+        if panel.isVisible { panel.makeKey() }
+    }
+
+    /// Makes the files (off the main thread: images may need converting, files copying), then
+    /// pastes, copies or saves them.
+    func finishExport(_ action: ExportAction) {
+        guard var draft = model.exportDraft, !draft.busy else { return }
+        let content: FileExport.Job.Content
+        switch draft.source {
+        case .text:
+            do {
+                let data = try textFileData(draft.item, draft.format)
+                content = .data(data)
+            } catch {
+                model.exportDraft?.error = error.localizedDescription
+                return
+            }
+        case .image:
+            guard let url = store.imageURL(draft.item) else { return }
+            content = .image(url)
+        case .files:
+            content = .files(draft.item.filePaths.map { URL(fileURLWithPath: $0) })
+        }
+        let job = FileExport.Job(content: content, names: draft.fileNames, format: draft.format,
+                                 quality: draft.quality, scale: draft.scale, convert: draft.convertible)
+        rememberExportChoices(draft)
+        draft.busy = true
+        draft.error = nil
+        model.exportDraft = draft
+        let item = draft.item
+        let root = exportsDir
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try FileExport.write(job, in: root) }
+            DispatchQueue.main.async { self.exportFinished(result, action, item: item) }
+        }
+    }
+
+    private func exportFinished(_ result: Result<[URL], Error>, _ action: ExportAction, item: ClipItem) {
+        guard model.exportDraft?.item.id == item.id else { return }   // the form was closed meanwhile
+        switch result {
+        case .failure(let error):
+            model.exportDraft?.busy = false
+            model.exportDraft?.error = error.localizedDescription
+        case .success(let urls):
+            switch action {
+            case .paste, .copy:
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.writeObjects(urls.map { $0 as NSURL })
+                monitor.markOwnChange()
+                store.touch(item.id)
+                reload()
+                hide()
+                if action == .paste { postPaste() }
+            case .save:
+                hide()
+                saveExport(urls)
+            }
+        }
+    }
+
+    /// Save…: moves the files where you choose (Downloads to start with).
+    private func saveExport(_ urls: [URL]) {
+        NSApp.activate()
+        let fm = FileManager.default
+        let downloads = fm.urls(for: .downloadsDirectory, in: .userDomainMask).first
+        do {
+            if urls.count == 1, let file = urls.first {
+                let save = NSSavePanel()
+                save.nameFieldStringValue = file.lastPathComponent
+                save.directoryURL = downloads
+                save.canCreateDirectories = true
+                save.isExtensionHidden = false
+                guard save.runModal() == .OK, let target = save.url else { return }
+                if fm.fileExists(atPath: target.path) {   // the panel already asked about replacing it
+                    _ = try fm.replaceItemAt(target, withItemAt: file)
+                } else {
+                    try fm.moveItem(at: file, to: target)
+                }
+            } else {
+                let open = NSOpenPanel()
+                open.canChooseFiles = false
+                open.canChooseDirectories = true
+                open.canCreateDirectories = true
+                open.directoryURL = downloads
+                open.prompt = "Save Here"
+                open.message = "Choose a folder for the \(urls.count) files."
+                guard open.runModal() == .OK, let folder = open.url else { return }
+                let existing = Set((try? fm.contentsOfDirectory(atPath: folder.path)) ?? [])
+                let names = ExportNaming.uniqued(urls.map(\.lastPathComponent), existing: existing)
+                for (file, name) in zip(urls, names) {
+                    try fm.moveItem(at: file, to: folder.appendingPathComponent(name))
+                }
+            }
+        } catch {
+            NSAlert(error: error).runModal()
+        }
+    }
+
+    /// The bytes of a text card saved as `format`.
+    private func textFileData(_ item: ClipItem, _ format: ExportFormat) throws -> Data {
+        let text = item.text ?? ""
+        switch format {
+        case .md:
+            return Data((item.formatted ? markdown(item) : text).utf8)
+        case .rtf, .docx, .html:
+            if format == .html,
+               let html = store.formats(item.id).first(where: { $0.type == NSPasteboard.PasteboardType.html.rawValue }) {
+                return html.data   // the page's own HTML, as it was copied
+            }
+            let rich = exportAttributed(item)
+            let type: NSAttributedString.DocumentType = format == .rtf ? .rtf : format == .docx ? .officeOpenXML : .html
+            return try rich.data(from: NSRange(location: 0, length: rich.length), documentAttributes: [.documentType: type])
+        default:
+            return Data(text.utf8)
+        }
+    }
+
+    /// Unformatted cards are shown in the label color, which is white in Dark Mode; files get black text.
+    private func exportAttributed(_ item: ClipItem) -> NSAttributedString {
+        if item.formatted { return attributed(item) }
+        let font = NSFont(name: "Helvetica", size: 12) ?? NSFont.systemFont(ofSize: 12)
+        return NSAttributedString(string: item.text ?? "", attributes: [.font: font, .foregroundColor: NSColor.black])
+    }
+
+    /// The next form starts with the format and quality used last.
+    private func rememberExportChoices(_ draft: ExportDraft) {
+        let defaults = UserDefaults.standard
+        switch draft.source {
+        case .image: defaults.set(draft.format.rawValue, forKey: "exportImageFormat")
+        case .text: defaults.set(draft.format.rawValue, forKey: "exportTextFormat")
+        case .files: break
+        }
+        if draft.format.isLossy { defaults.set(draft.quality, forKey: "exportQuality") }
+    }
+
+    /// What a card carries when dragged out of the shelf. An image becomes a file with a readable
+    /// name (a hard link to the stored PNG, so it takes no extra space).
+    func dragItem(_ item: ClipItem) -> NSItemProvider? {
+        switch item.kind {
+        case .text:
+            return NSItemProvider(object: (item.text ?? "") as NSString)
+        case .link:
+            guard let url = URL(string: (item.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
+            return NSItemProvider(object: url as NSURL)
+        case .image:
+            guard let source = store.imageURL(item) else { return nil }
+            let fm = FileManager.default
+            let dir = exportsDir.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            let file = dir.appendingPathComponent(ExportNaming.timestampName("Image", item.created) + ".png")
+            guard (try? fm.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])) != nil,
+                  (try? fm.linkItem(at: source, to: file)) != nil || (try? fm.copyItem(at: source, to: file)) != nil
+            else { return nil }
+            return NSItemProvider(contentsOf: file)
+        case .file:
+            guard item.filePaths.count == 1, let path = item.filePaths.first else { return nil }
+            return NSItemProvider(contentsOf: URL(fileURLWithPath: path))
+        }
+    }
+
     // MARK: - Paste stack
 
     /// Pastes the first stacked item now; each ⌘V you press afterwards pastes the next one.
@@ -524,9 +904,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         runOCR() // pick up images copied while this batch ran
     }
 
-    /// Runs at launch and hourly: expire old history, then take the daily pinboard backup.
+    /// Runs at launch and hourly: expire old history and day-old exported files, then take the daily
+    /// pinboard backup.
     private func prune() {
         store.prune(olderThan: Date().addingTimeInterval(-Double(retentionDays) * 86400))
+        FileExport.prune(exportsDir)
         store.autoBackup()
         reload()
     }
@@ -570,8 +952,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         let pause = menu.addItem(withTitle: "Pause Capture", action: #selector(togglePause), keyEquivalent: "")
         pause.state = monitor.paused ? .on : .off
         let plain = menu.addItem(withTitle: "Paste as Plain Text by Default", action: #selector(togglePlainByDefault), keyEquivalent: "")
-        plain.state = model.plainByDefault ? .on : .off
+        plain.state = model.plainEverywhere ? .on : .off
         plain.toolTip = "Return pastes without fonts, colors or tables; ⇧Return keeps the formatting"
+        let styles = menu.addItem(withTitle: "Paste Style in Apps", action: nil, keyEquivalent: "")
+        menu.setSubmenu(appStylesMenu(), for: styles)
         let ignored = menu.addItem(withTitle: "Ignored Apps", action: nil, keyEquivalent: "")
         menu.setSubmenu(ignoredAppsMenu(), for: ignored)
         let login = menu.addItem(withTitle: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
@@ -612,9 +996,93 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
     @objc private func togglePause() { monitor.paused.toggle() }
 
-    @objc private func togglePlainByDefault() {
-        model.plainByDefault.toggle()
-        UserDefaults.standard.set(model.plainByDefault, forKey: "pastePlainByDefault")
+    @objc private func togglePlainByDefault() { setPlainEverywhere(!model.plainEverywhere) }
+
+    private func setPlainEverywhere(_ plain: Bool) {
+        model.plainEverywhere = plain
+        UserDefaults.standard.set(plain, forKey: "pastePlainByDefault")
+    }
+
+    // MARK: - Paste style per app
+
+    /// Bundle id → whether Return pastes plain text in that app. Only apps you set are listed;
+    /// the rest follow Paste as Plain Text by Default.
+    private var appStyles: [String: Bool] {
+        get { UserDefaults.standard.dictionary(forKey: "pasteStyleByApp") as? [String: Bool] ?? [:] }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "pasteStyleByApp")
+            model.appStyles = newValue
+        }
+    }
+
+    /// The control at the bottom right of the shelf: what Return pastes in the app you're pasting into.
+    func showStyleMenu() {
+        let menu = NSMenu()
+        let title = model.target.map { "Return in \($0.name) pastes" } ?? "Return pastes"
+        menu.addItem(withTitle: title, action: nil, keyEquivalent: "").isEnabled = false
+        let formatted = menu.addItem(withTitle: "With Formatting", action: #selector(useFormattedHere), keyEquivalent: "")
+        formatted.state = model.plainByDefault ? .off : .on
+        let plain = menu.addItem(withTitle: "Plain Text", action: #selector(usePlainHere), keyEquivalent: "")
+        plain.state = model.plainByDefault ? .on : .off
+        if model.target != nil {
+            menu.addItem(.separator())
+            let others = "Other apps: " + (model.plainEverywhere ? "Plain Text" : "With Formatting")
+            menu.addItem(withTitle: others, action: nil, keyEquivalent: "").isEnabled = false
+        }
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "⇧Return pastes the other way; ⌘K has more", action: nil, keyEquivalent: "").isEnabled = false
+        for entry in menu.items { entry.target = self }
+        popUpAtMouse(menu)
+    }
+
+    @objc private func useFormattedHere() { setStyleHere(plain: false) }
+
+    @objc private func usePlainHere() { setStyleHere(plain: true) }
+
+    /// Sets what Return pastes in the app being pasted into (with no app, the default). A choice
+    /// that matches the default isn't stored, so the app keeps following the default.
+    private func setStyleHere(plain: Bool) {
+        guard let bundle = model.target?.bundle else {
+            setPlainEverywhere(plain)
+            return
+        }
+        var styles = appStyles
+        styles[bundle] = plain == model.plainEverywhere ? nil : plain
+        appStyles = styles
+    }
+
+    private func appStylesMenu() -> NSMenu {
+        let menu = NSMenu()
+        let styles = appStyles.map { (bundle: $0.key, name: Self.appName($0.key), plain: $0.value) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        if styles.isEmpty {
+            menu.addItem(withTitle: "No apps set", action: nil, keyEquivalent: "").isEnabled = false
+        }
+        for style in styles {
+            let entry = NSMenuItem(title: "\(style.name): \(style.plain ? "Plain Text" : "With Formatting")",
+                                   action: #selector(forgetAppStyle(_:)), keyEquivalent: "")
+            entry.representedObject = style.bundle
+            entry.state = .on
+            entry.toolTip = "Click to follow Paste as Plain Text by Default in this app again"
+            entry.target = self
+            menu.addItem(entry)
+        }
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Set it at the bottom right of the shelf", action: nil, keyEquivalent: "").isEnabled = false
+        return menu
+    }
+
+    @objc private func forgetAppStyle(_ sender: NSMenuItem) {
+        guard let bundle = sender.representedObject as? String else { return }
+        var styles = appStyles
+        styles[bundle] = nil
+        appStyles = styles
+    }
+
+    private func popUpAtMouse(_ menu: NSMenu) {
+        guard let view = panel.contentView else { return }
+        let point = view.convert(panel.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+        menu.popUp(positioning: nil, at: point, in: view)
     }
 
     // MARK: - Ignored apps

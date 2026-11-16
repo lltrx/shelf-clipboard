@@ -6,6 +6,32 @@ All notable changes to Shelf are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Paste As (⌘K, or right-click → Paste As):** every way to paste the selected card, each picked with
+  one letter. Text: with formatting, as plain text, or as **Markdown** (bold, italic, links, code and
+  lists carried over); UPPERCASE, lowercase, Capitalize Words, Trim Whitespace (removes trailing
+  spaces, shared indentation and extra blank lines), Join Lines, and Format JSON (keeps key order).
+  Links: Remove Tracking (utm_…, fbclid, gclid and others). Images: Paste Text in Image (the text Shelf
+  recognized). Files: Paste File Paths or File Names. The card itself isn't changed.
+- **Copy as File (⇧⌘C, or right-click):** turn a card into a file with the name and format you choose.
+  Images and image files convert to PNG, JPEG, HEIC, TIFF, GIF or PDF, with a quality slider for JPEG
+  and HEIC and a size option (75%, 50%, 25%); the form shows the resulting size before you commit.
+  Text becomes a Plain Text (any extension you type, such as `deploy.sh`), Markdown, RTF, Word or HTML
+  file. Any other file can be renamed. Then press Return to paste the file (into Finder, Mail, Slack…),
+  ⌘C to copy it, or ⌘S to save it somewhere.
+- **Paste style per app:** the bottom right of the shelf says what Return pastes in the app you're
+  pasting into (for example "Excel: Plain Text"). Click it to choose formatted or plain text for that
+  app; Shelf remembers it. The list is in the Shelf menu under **Paste Style in Apps**.
+- **Filter by kind:** ↑ ↓, or the icons next to the search field, show only text, links, images or files.
+- **Drag cards out** of the shelf into other apps. Images arrive as a PNG file with a readable name.
+- A bar at the bottom of the shelf shows what the keys do for the selected card. **Hold ⌘** to see
+  ⌘1–⌘9 on the cards and every ⌘ shortcut.
+- Text cards that are just a hex color (`#1E90FF`) show the color.
+
+### Changed
+- Clearer empty states (no matches, empty pinboard, empty filter), each saying what to do next.
+- The shelf is slightly taller to fit the new bottom bar.
+
 ## [1.5.0] - 2026-10-23
 
 ### Added

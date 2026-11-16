@@ -6,15 +6,21 @@ protocol ShelfActions: AnyObject {
     func imageURL(_ item: ClipItem) -> URL?
     func attributed(_ item: ClipItem) -> NSAttributedString
     func paste(_ item: ClipItem, plain: Bool)
+    func pasteAs(_ item: ClipItem, _ option: PasteOption)
     func copy(_ item: ClipItem)
     func delete(_ item: ClipItem)
     func setBoard(_ item: ClipItem, _ board: Int64?)
     func togglePreview()
     func edit(_ item: ClipItem)
+    func startExport(_ item: ClipItem)
+    func finishExport(_ action: ExportAction)
+    func cancelExport()
+    func dragItem(_ item: ClipItem) -> NSItemProvider?
     func commitName()
     func deleteBoard(_ board: Board)
     func ignoreApp(_ item: ClipItem)
     func showMenu()
+    func showStyleMenu()
 }
 
 enum Naming: Equatable {
@@ -26,6 +32,7 @@ final class ShelfModel: ObservableObject {
     @Published var items: [ClipItem] = []
     @Published var boards: [Board] = []
     @Published var tab: Int64? { didSet { selection = 0 } }   // nil = History
+    @Published var kindFilter: ClipKind? { didSet { selection = 0 } }   // nil = every kind
     @Published var query = "" { didSet { selection = 0 } }
     @Published var selection = 0
     @Published var now = Date()
@@ -34,20 +41,37 @@ final class ShelfModel: ObservableObject {
     @Published var password: ClipItem?          // placeholder card for a password on the clipboard
     @Published var previewing = false
     @Published var editing = false
+    @Published var exportDraft: ExportDraft?    // the Copy as File form, while it's open
     @Published var naming: Naming?
     @Published var nameDraft = ""
-    @Published var plainByDefault = false       // Return pastes plain text; ⇧ adds the formatting back
+    @Published var commandHeld = false          // ⌘ held down: cards show ⌘1…⌘9 and the bar lists ⌘ shortcuts
+    @Published var target: TargetApp?           // the app the shelf pastes into
+    @Published var plainEverywhere = false      // Paste as Plain Text by Default
+    @Published var appStyles: [String: Bool] = [:]   // bundle id → Return pastes plain text (true) or formatted there
+
+    struct TargetApp: Equatable {
+        let bundle: String
+        let name: String
+    }
+
+    static let filterKinds: [ClipKind] = [.text, .link, .image, .file]
 
     weak var actions: ShelfActions?
     weak var editor: NSTextView?
     var pendingPin: Int64?                      // item to pin once a new board is named
 
+    /// Return pastes plain text (⇧ adds the formatting back): the target app's own setting, else the default.
+    var plainByDefault: Bool {
+        target.flatMap { appStyles[$0.bundle] } ?? plainEverywhere
+    }
+
     var filtered: [ClipItem] {
-        let base = tab.map { board in items.filter { $0.board == board } } ?? items
+        var base = tab.map { board in items.filter { $0.board == board } } ?? items
+        if let kindFilter { base = base.filter { $0.kind == kindFilter } }
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else {
             // A password on the clipboard is the most recent copy, so it leads History.
-            if tab == nil, let password { return [password] + base }
+            if tab == nil, kindFilter == nil, let password { return [password] + base }
             return base
         }
         return base.filter {
@@ -79,6 +103,13 @@ final class ShelfModel: ObservableObject {
         tab = tabs[(i + delta + tabs.count) % tabs.count]
     }
 
+    /// ↑ ↓: All, Text, Links, Images, Files.
+    func cycleKind(_ delta: Int) {
+        let kinds: [ClipKind?] = [nil] + Self.filterKinds.map { Optional($0) }
+        let i = kinds.firstIndex(of: kindFilter) ?? 0
+        kindFilter = kinds[(i + delta + kinds.count) % kinds.count]
+    }
+
     func toggleStack(_ item: ClipItem) {
         guard !item.concealed else { return }
         if let i = stack.firstIndex(of: item.id) { stack.remove(at: i) } else { stack.append(item.id) }
@@ -100,7 +131,7 @@ struct ShelfView: View {
 
     var body: some View {
         let list = model.filtered
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             HStack(spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -108,8 +139,9 @@ struct ShelfView: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
                         .focused($focus, equals: .search)
+                    kindFilters
                 }
-                .frame(width: 280, alignment: .leading)
+                .frame(width: 300, alignment: .leading)
                 Spacer()
                 tabs
                 Spacer()
@@ -127,23 +159,114 @@ struct ShelfView: View {
                     .foregroundStyle(.secondary)
                     .help("Shelf menu (⌘,)")
                 }
-                .frame(width: 280, alignment: .trailing)
+                .frame(width: 300, alignment: .trailing)
             }
             .padding(.horizontal, 22)
 
             if list.isEmpty {
-                Text(emptyText)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                emptyState
             } else {
                 cards(list)
             }
+
+            footer
+                .padding(.horizontal, 22)
         }
         .padding(.top, 14)
-        .padding(.bottom, 18)
+        .padding(.bottom, 12)
         .onChange(of: model.focusTick) { focus = .search }
         .onChange(of: model.naming) { focus = model.naming == nil ? .search : .name }
+    }
+
+    /// Show only one kind of card. ↑ ↓ cycle through them.
+    private var kindFilters: some View {
+        HStack(spacing: 2) {
+            ForEach(ShelfModel.filterKinds, id: \.self) { kind in
+                let on = model.kindFilter == kind
+                let name = kind.plural.lowercased()
+                let tip: String = on ? "Showing only \(name). Click to show everything (↑ ↓)" : "Show only \(name) (↑ ↓)"
+                Button { model.kindFilter = on ? nil : kind } label: {
+                    Image(systemName: kind.symbol)
+                        .font(.system(size: 11))
+                        .frame(width: 24, height: 22)
+                        .foregroundStyle(on ? .primary : .secondary)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(on ? Color.primary.opacity(0.12) : .clear))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(tip)
+            }
+        }
+    }
+
+    // MARK: Footer
+
+    /// What the keys do for the selected card. Holding ⌘ lists the ⌘ shortcuts instead.
+    private var footer: some View {
+        HStack(spacing: 14) {
+            ForEach(hints, id: \.self) { hint in
+                HStack(spacing: 4) {
+                    Text(hint.key).font(.system(size: 11, weight: .semibold))
+                    Text(hint.label).font(.system(size: 11))
+                }
+                .fixedSize()
+            }
+            Spacer(minLength: 12)
+            styleButton
+        }
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .frame(height: 20)
+    }
+
+    private var hints: [Hint] {
+        if model.commandHeld {
+            return [Hint("⌘1–9", "Paste"), Hint("⌘K", "Paste As…"), Hint("⇧⌘C", "Copy as File…"), Hint("⌘C", "Copy"),
+                    Hint("⌘P", "Pin"), Hint("⌘S", "Stack"), Hint("⌘E", "Edit"), Hint("⌘⌫", "Delete")]
+        }
+        if !model.stack.isEmpty {
+            return [Hint("↩", "Paste stack in order"), Hint("⌥↩", "Paste all at once"), Hint("⌘S", "Add or remove")]
+        }
+        guard let item = model.selected else { return [Hint("⇥", "Next tab"), Hint("↑↓", "Filter")] }
+        if item.concealed { return [Hint("↩", "Paste password")] }
+        var hints: [Hint] = []
+        if item.formatted {
+            hints.append(Hint("↩", model.plainByDefault ? "Paste as plain text" : "Paste with formatting"))
+            hints.append(Hint("⇧↩", model.plainByDefault ? "With formatting" : "As plain text"))
+        } else {
+            hints.append(Hint("↩", "Paste"))
+        }
+        hints.append(Hint("⌘K", "Paste As…"))
+        if model.query.isEmpty { hints.append(Hint("Space", "Preview")) }
+        hints.append(Hint("↑↓", "Filter"))
+        hints.append(Hint("⌘", "Hold for more"))
+        return hints
+    }
+
+    /// What Return pastes in the app you're pasting into. Click to change it for that app.
+    private var styleButton: some View {
+        Button { model.actions?.showStyleMenu() } label: {
+            HStack(spacing: 5) {
+                if let icon = AppIcons.icon(for: model.target?.bundle) {
+                    Image(nsImage: icon).resizable().frame(width: 14, height: 14)
+                }
+                Text(styleLabel).font(.system(size: 11))
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.07)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("What Return pastes in this app. ⇧Return pastes the other way.")
+    }
+
+    private var styleLabel: String {
+        let style = model.plainByDefault ? "Plain Text" : "Formatted"
+        guard let name = model.target?.name else { return "Paste: \(style)" }
+        return "\(name): \(style)"
     }
 
     private var tabs: some View {
@@ -192,11 +315,13 @@ struct ShelfView: View {
                     ForEach(Array(list.enumerated()), id: \.element.id) { index, item in
                         CardView(item: item, selected: index == model.selection, now: model.now,
                                  stackPosition: model.stack.firstIndex(of: item.id).map { $0 + 1 },
+                                 shortcut: model.commandHeld && index < 9 ? index + 1 : nil,
                                  imageURL: model.actions?.imageURL(item))
                             .id(item.id)
                             .onTapGesture(count: 2) { model.actions?.paste(item, plain: model.plainByDefault) }
                             .onTapGesture { model.selection = index }
                             .contextMenu { menu(item, index) }
+                            .dragOut(item.draggable) { model.actions?.dragItem(item) ?? NSItemProvider() }
                     }
                 }
                 .padding(.horizontal, 22)
@@ -225,7 +350,17 @@ struct ShelfView: View {
                 model.actions?.paste(item, plain: !model.plainByDefault)
             }
         }
+        Menu("Paste As") {
+            let sections = PasteOption.sections(for: item)
+            ForEach(Array(sections.enumerated()), id: \.offset) { i, section in
+                if i > 0 { Divider() }
+                ForEach(section, id: \.self) { option in
+                    Button(option.title) { model.actions?.pasteAs(item, option) }
+                }
+            }
+        }
         Button("Copy") { model.actions?.copy(item) }
+        Button("Copy as File…") { model.selection = index; model.actions?.startExport(item) }
         Divider()
         Button("Preview") { model.selection = index; if !model.previewing { model.actions?.togglePreview() } }
         if item.editable {
@@ -252,16 +387,86 @@ struct ShelfView: View {
 
     private func status(_ list: [ClipItem]) -> String {
         if !model.stack.isEmpty {
-            return "\(model.stack.count) in stack · Return pastes in order"
+            return "\(model.stack.count) in stack"
         }
         let count = list.filter { !$0.concealed }.count
         return count == 1 ? "1 item" : "\(count) items"
     }
 
-    private var emptyText: String {
-        if !model.query.isEmpty { return "No matches" }
-        if model.tab != nil { return "Nothing pinned here yet. Press ⌘P on an item to pin it." }
-        return "Nothing copied yet"
+    private var emptyState: some View {
+        VStack(spacing: 6) {
+            Image(systemName: emptyText.symbol)
+                .font(.system(size: 22))
+                .foregroundStyle(.tertiary)
+            Text(emptyText.title).font(.system(size: 13, weight: .medium))
+            Text(emptyText.detail).font(.system(size: 11)).foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyText: (symbol: String, title: String, detail: String) {
+        let only = model.kindFilter.map { " Showing only \($0.plural.lowercased()); ↑ ↓ shows other kinds." } ?? ""
+        if !model.query.isEmpty {
+            return ("magnifyingglass", "No matches for “\(model.query)”",
+                    "Search looks in text, links, file names, app names, and text inside images." + only)
+        }
+        if let kind = model.kindFilter {
+            return (kind.symbol, "No \(kind.plural.lowercased()) here", "Press ↑ or ↓ to show other kinds, or click the icon again.")
+        }
+        if model.tab != nil {
+            return ("pin", "Nothing pinned here yet", "Select a card and press ⌘P to pin it.")
+        }
+        return ("doc.on.clipboard", "Nothing copied yet", "Copy something with ⌘C and it shows up here.")
+    }
+}
+
+private struct Hint: Hashable {
+    let key: String
+    let label: String
+
+    init(_ key: String, _ label: String) {
+        self.key = key
+        self.label = label
+    }
+}
+
+extension ClipKind {
+    var symbol: String {
+        switch self {
+        case .text: return "text.alignleft"
+        case .link: return "link"
+        case .image: return "photo"
+        case .file: return "doc"
+        }
+    }
+
+    var plural: String {
+        switch self {
+        case .text: return "Text"
+        case .link: return "Links"
+        case .image: return "Images"
+        case .file: return "Files"
+        }
+    }
+}
+
+extension ClipItem {
+    /// Can be dragged into other apps. Several files can't (a drag carries one item here).
+    var draggable: Bool { !concealed && !(kind == .file && filePaths.count > 1) }
+
+    /// A text card that is just a hex color, shown as a swatch.
+    var color: ColorText.RGBA? { kind == .text ? ColorText.parse(text ?? "") : nil }
+}
+
+extension View {
+    /// Lets a card be dragged out of the shelf into another app.
+    @ViewBuilder func dragOut(_ enabled: Bool, _ provider: @escaping () -> NSItemProvider) -> some View {
+        if enabled {
+            onDrag(provider)
+        } else {
+            self
+        }
     }
 }
 
@@ -289,13 +494,14 @@ struct CardView: View {
     let selected: Bool
     let now: Date
     let stackPosition: Int?
+    let shortcut: Int?          // 1…9 while ⌘ is held: ⌘ and that number pastes this card
     let imageURL: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.concealed ? "Password" : item.kind.title).font(.system(size: 12, weight: .semibold))
+                    Text(title).font(.system(size: 12, weight: .semibold))
                     Text(relativeTime).font(.system(size: 10)).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -312,13 +518,16 @@ struct CardView: View {
                 .padding(10)
                 .clipped()
 
-            HStack {
+            HStack(spacing: 6) {
                 Text(footer).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
                 if let stackPosition {
                     Text("Stack \(stackPosition)").font(.system(size: 10, weight: .medium)).foregroundStyle(Color.accentColor)
                 } else if item.pinned {
                     Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary)
+                }
+                if let shortcut {
+                    Text("⌘\(shortcut)").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, 10)
@@ -352,12 +561,27 @@ struct CardView: View {
         }
     }
 
+    private var title: String {
+        if item.concealed { return "Password" }
+        return item.color != nil ? "Color" : item.kind.title
+    }
+
     @ViewBuilder private var kindContent: some View {
         switch item.kind {
         case .text:
-            Text(String((item.text ?? "").prefix(800)))
-                .font(.system(size: 12))
-                .lineLimit(9)
+            if let color = item.color {
+                VStack(alignment: .leading, spacing: 8) {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(.sRGB, red: color.red, green: color.green, blue: color.blue, opacity: color.alpha))
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.12)))
+                    Text((item.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines))
+                        .font(.system(size: 12, design: .monospaced))
+                }
+            } else {
+                Text(String((item.text ?? "").prefix(800)))
+                    .font(.system(size: 12))
+                    .lineLimit(9)
+            }
         case .link:
             VStack(alignment: .leading, spacing: 4) {
                 Text(URL(string: item.text ?? "")?.host ?? "")
@@ -379,6 +603,8 @@ struct CardView: View {
     private var footer: String {
         if item.concealed { return "Return or ⌘V pastes it" }
         switch item.kind {
+        case .text where item.color != nil:
+            return "Hex color"
         case .text:
             let n = item.text?.count ?? 0
             let count = n == 1 ? "1 character" : "\(n.formatted()) characters"
@@ -439,6 +665,14 @@ struct PreviewView: View {
     @ObservedObject var model: ShelfModel
 
     var body: some View {
+        if model.exportDraft != nil {
+            ExportView(model: model)
+        } else {
+            preview
+        }
+    }
+
+    private var preview: some View {
         VStack(alignment: .leading, spacing: 0) {
             if model.selected?.concealed == true {
                 Text("Passwords aren't shown or saved. Return or ⌘V pastes it.")
@@ -516,7 +750,7 @@ struct PreviewView: View {
         if model.editing {
             return "⌘Return paste · ⇧⌘Return \(model.plainByDefault ? "formatted" : "plain") · Esc cancel"
         }
-        return item.editable ? "⌘E edit · Space close" : "Space close"
+        return item.editable ? "⌘E edit · ⌘K paste as · Space close" : "⌘K paste as · Space close"
     }
 }
 
