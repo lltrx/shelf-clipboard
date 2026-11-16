@@ -9,7 +9,7 @@ name: Beta release
 on:
   push:
     branches: ["**"]
-    paths: [".github/beta-version"]   # branch pushes: only when the version file changes
+    paths: [".github/beta-version", ".github/workflows/beta.yml"]   # branch pushes: only these
     tags: ["v*-beta*"]                # tag pushes always run (paths don't apply to tags)
 
 permissions:
@@ -18,11 +18,12 @@ permissions:
 jobs:
   beta:
     name: Build and publish beta
-    runs-on: macos-14
+    runs-on: macos-15   # macos-14 was retired on 2026-11-02
     steps:
       - uses: actions/checkout@v4
 
       - name: Pick the version
+        id: version
         run: |
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             VERSION="${GITHUB_REF_NAME#v}"
@@ -34,20 +35,23 @@ jobs:
             *) echo "::error::$VERSION isn't a beta version (like 1.6.0-beta.1)"; exit 1 ;;
           esac
           if gh release view "v$VERSION" >/dev/null 2>&1; then
-            echo "::error::v$VERSION is already released; bump .github/beta-version"
-            exit 1
+            echo "::notice::v$VERSION is already released. Change .github/beta-version to publish a new beta."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Show toolchain
+        if: steps.version.outputs.skip != 'true'
         run: swift --version
 
       - name: Run tests
+        if: steps.version.outputs.skip != 'true'
         run: swift test
 
       - name: Build universal app
+        if: steps.version.outputs.skip != 'true'
         run: |
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Info.plist
           ./build.sh
@@ -55,6 +59,7 @@ jobs:
           echo "SHA256=$(shasum -a 256 "Shelf-$VERSION.zip" | cut -d' ' -f1)" >> "$GITHUB_ENV"
 
       - name: Publish pre-release
+        if: steps.version.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
