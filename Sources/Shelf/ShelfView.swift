@@ -80,12 +80,8 @@ final class ShelfModel: ObservableObject {
             if tab == nil, kindFilter == nil, let password { return [password] + base }
             return base
         }
-        return base.filter {
-            ($0.text?.localizedCaseInsensitiveContains(q) ?? false) ||
-                ($0.ocr?.localizedCaseInsensitiveContains(q) ?? false) ||
-                ($0.sourceName?.localizedCaseInsensitiveContains(q) ?? false) ||
-                $0.kind.title.localizedCaseInsensitiveContains(q)
-        }
+        let search = SearchQuery(q, now: now)   // from:app, @today, @yesterday, @week, @month, then text
+        return base.filter(search.matches)
     }
 
     var selected: ClipItem? {
@@ -151,7 +147,7 @@ struct ShelfView: View {
             HStack(spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search", text: $model.query)
+                    TextField("Search   from:app  @today", text: $model.query)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
                         .focused($focus, equals: .search)
@@ -470,7 +466,7 @@ struct ShelfView: View {
         let only = model.kindFilter.map { " Showing only \($0.plural.lowercased()); ↑ ↓ shows other kinds." } ?? ""
         if !model.query.isEmpty {
             return ("magnifyingglass", "No matches for “\(model.query)”",
-                    "Search looks in text, links, file names, app names, and text inside images." + only)
+                    "Search looks in text, links, file names, app names, and text inside images. Try from:app or @today." + only)
         }
         if let kind = model.kindFilter {
             return (kind.symbol, "No \(kind.plural.lowercased()) here", "Press ↑ or ↓ to show other kinds, or click the icon again.")
