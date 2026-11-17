@@ -56,6 +56,7 @@ final class ShelfModel: ObservableObject {
     @Published var popoverSize = CGSize(width: 400, height: 193)   // the box's size (bigger while editing an image)
     @Published var exportFocus: ExportField = .name   // the paste box control Tab is on
     var selectedCardMidX: CGFloat?              // the selected card's center in the shelf, for the paste box
+    var cardFrames: [Int64: CGRect] = [:]      // where the visible cards are, to drag several at once
 
     struct TargetApp: Equatable {
         let bundle: String
@@ -353,14 +354,20 @@ struct ShelfView: View {
                                  shortcut: model.commandHeld && index < 9 ? index + 1 : nil,
                                  imageURL: model.actions?.imageURL(item))
                             .background {
-                                if index == model.selection {
-                                    GeometryReader { geo in
-                                        Color.clear
-                                            .onAppear { model.selectedCardMidX = geo.frame(in: .global).midX }
-                                            .onChange(of: geo.frame(in: .global).midX) {
-                                                model.selectedCardMidX = geo.frame(in: .global).midX
-                                            }
-                                    }
+                                GeometryReader { geo in
+                                    Color.clear
+                                        .onAppear {
+                                            model.cardFrames[item.id] = geo.frame(in: .global)
+                                            if index == model.selection { model.selectedCardMidX = geo.frame(in: .global).midX }
+                                        }
+                                        .onChange(of: geo.frame(in: .global)) {
+                                            model.cardFrames[item.id] = geo.frame(in: .global)
+                                            if index == model.selection { model.selectedCardMidX = geo.frame(in: .global).midX }
+                                        }
+                                        .onChange(of: index == model.selection) {
+                                            if index == model.selection { model.selectedCardMidX = geo.frame(in: .global).midX }
+                                        }
+                                        .onDisappear { model.cardFrames[item.id] = nil }
                                 }
                             }
                             .onTapGesture(count: 2) {
@@ -512,7 +519,8 @@ extension ClipKind {
 }
 
 extension ClipItem {
-    /// Can be dragged into other apps. Several files can't (a drag carries one item here).
+    /// Can be dragged into other apps by SwiftUI, which carries one item. A card with several files
+    /// (and several marked cards) is dragged by the shelf's panel instead.
     var draggable: Bool { !concealed && !(kind == .file && filePaths.count > 1) }
 
     /// A text card that is just a hex color, shown as a swatch.

@@ -7,6 +7,12 @@ import SwiftUI
 final class ShelfPanel: NSPanel {
     var onResignKey: () -> Void = {}
     var allowsKey = true
+    /// Asked at each mouse-down: whether a drag from there is Shelf's own (several cards at once).
+    var ownsDrag: ((NSEvent) -> Bool)?
+    /// Starts that drag, given the mouse-down and the first move.
+    var startDrag: ((NSEvent, NSEvent) -> Void)?
+    private enum DragState { case none, pending(NSEvent), started }
+    private var drag = DragState.none
 
     init() {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
@@ -27,6 +33,35 @@ final class ShelfPanel: NSPanel {
     override func resignKey() {
         super.resignKey()
         onResignKey()
+    }
+
+    /// SwiftUI's drag carries one item, so dragging several cards is started here, before SwiftUI
+    /// sees the mouse move. Clicks still reach SwiftUI as usual.
+    override func sendEvent(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDown:
+            drag = ownsDrag?(event) == true ? .pending(event) : .none
+        case .leftMouseDragged:
+            switch drag {
+            case .pending(let start):
+                let dx = event.locationInWindow.x - start.locationInWindow.x
+                let dy = event.locationInWindow.y - start.locationInWindow.y
+                if dx * dx + dy * dy >= 9 {   // 3 points: a drag, not a shaky click
+                    drag = .started
+                    startDrag?(start, event)
+                }
+                return                        // SwiftUI mustn't start a drag of its own
+            case .started:
+                return
+            case .none:
+                break
+            }
+        case .leftMouseUp:
+            drag = .none
+        default:
+            break
+        }
+        super.sendEvent(event)
     }
 
     /// SwiftUI content that draws its own shape and background (the paste box with its arrow).
@@ -150,6 +185,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         preview.allowsKey = false
         popover.hostPlain(ExportView(model: model))
         popover.allowsKey = false
+        panel.ownsDrag = { [unowned self] event in !severalToDrag(at: event).isEmpty }
+        panel.startDrag = { [unowned self] start, event in dragSeveral(severalToDrag(at: start), with: event) }
 
         // Hide only when focus leaves all the panels (moving into the editor or the paste box is fine).
         let focusCheck = { [unowned self] in
@@ -1147,18 +1184,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             guard let url = URL(string: (item.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
             return NSItemProvider(object: url as NSURL)
         case .image:
-            guard let source = store.imageURL(item) else { return nil }
-            let fm = FileManager.default
-            let dir = exportsDir.appendingPathComponent(UUID().uuidString, isDirectory: true)
-            let file = dir.appendingPathComponent(ExportNaming.timestampName("Image", item.created) + ".png")
-            guard (try? fm.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])) != nil,
-                  (try? fm.linkItem(at: source, to: file)) != nil || (try? fm.copyItem(at: source, to: file)) != nil
-            else { return nil }
-            return NSItemProvider(contentsOf: file)
+            return dragFile(for: item).flatMap { NSItemProvider(contentsOf: $0) }
         case .file:
             guard item.filePaths.count == 1, let path = item.filePaths.first else { return nil }
             return NSItemProvider(contentsOf: URL(fileURLWithPath: path))
         }
+    }
+
+    /// An image card as a PNG file with a readable name, for dragging.
+    private func dragFile(for item: ClipItem) -> URL? {
+        guard let source = store.imageURL(item) else { return nil }
+        let fm = FileManager.default
+        let dir = exportsDir.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let file = dir.appendingPathComponent(ExportNaming.timestampName("Image", item.created) + ".png")
+        guard (try? fm.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])) != nil,
+              (try? fm.linkItem(at: source, to: file)) != nil || (try? fm.copyItem(at: source, to: file)) != nil
+        else { return nil }
+        return file
+    }
+
+    /// The cards a drag starting at `event` carries, when it's more than SwiftUI's single item: the
+    /// marked cards (when the drag starts on one of them), or a card holding several files.
+    private func severalToDrag(at event: NSEvent) -> [ClipItem] {
+        guard shelfOpen, model.exportDraft == nil, let view = panel.contentView else { return [] }
+        let p = event.locationInWindow
+        let point = CGPoint(x: p.x, y: view.bounds.height - p.y)   // SwiftUI's frames run down from the top
+        guard let id = model.cardFrames.first(where: { $0.value.contains(point) })?.key,
+              let item = model.items.first(where: { $0.id == id }), !item.concealed else { return [] }
+        if model.stack.count > 1, model.stack.contains(id) {
+            return model.stack.compactMap { marked in model.items.first { $0.id == marked && !$0.concealed } }
+        }
+        return item.kind == .file && item.filePaths.count > 1 ? [item] : []
+    }
+
+    /// Drags several cards (or files) out at once, as a pile under the mouse. Files and images go as
+    /// files, links as links, text as text.
+    private func dragSeveral(_ items: [ClipItem], with event: NSEvent) {
+        guard !items.isEmpty, let view = panel.contentView else { return }
+        let origin = view.convert(event.locationInWindow, from: nil)
+        var dragging: [NSDraggingItem] = []
+        func add(_ writer: NSPasteboardWriting, _ icon: NSImage?) {
+            let item = NSDraggingItem(pasteboardWriter: writer)
+            let n = CGFloat(min(dragging.count, 6))
+            item.setDraggingFrame(NSRect(x: origin.x - 24 + n * 5, y: origin.y - 24 - n * 5, width: 48, height: 48),
+                                  contents: icon)
+            dragging.append(item)
+        }
+        for item in items {
+            switch item.kind {
+            case .file:
+                for path in item.filePaths {
+                    add(URL(fileURLWithPath: path) as NSURL, NSWorkspace.shared.icon(forFile: path))
+                }
+            case .image:
+                guard let file = dragFile(for: item) else { continue }
+                add(file as NSURL, NSImage(contentsOf: file))
+            case .link:
+                let text = (item.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let url = URL(string: text) else { continue }
+                add(url as NSURL, NSImage(systemSymbolName: "link", accessibilityDescription: nil))
+            case .text:
+                add((item.text ?? "") as NSString, NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil))
+            }
+        }
+        guard !dragging.isEmpty else { return }
+        let session = view.beginDraggingSession(with: dragging, event: event, source: self)
+        session.draggingFormation = .pile
+        session.animatesToStartingPositionsOnCancelOrFail = true
     }
 
     // MARK: - Paste stack
@@ -1637,5 +1729,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             store.clearUnpinned()
             reload()
         }
+    }
+}
+
+extension AppDelegate: NSDraggingSource {
+    /// Cards dragged out are copied: the shelf keeps them.
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        .copy
     }
 }
