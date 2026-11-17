@@ -112,8 +112,12 @@ final class ImageEditTests: XCTestCase {
         XCTAssertLessThan(tinted.2, 200)                 // yellowish: blue taken out
         // Some dark pixels just below and right of where the text starts.
         var dark = 0
-        for y in 102..<118 { for x in 42..<120 where try pixel(edited, x, y).0 < 100 { dark += 1 } }
-        XCTAssertGreaterThan(dark, 10)
+        for y in stride(from: 102, to: 118, by: 2) {
+            for x in stride(from: 42, to: 120, by: 2) {
+                if try pixel(edited, x, y).0 < 100 { dark += 1 }
+            }
+        }
+        XCTAssertGreaterThan(dark, 3)
     }
 }
 

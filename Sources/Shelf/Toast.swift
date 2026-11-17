@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 /// A short message near the bottom of the screen ("Copied 42 words"), gone after a moment. It never
-/// takes focus or clicks, so the app you're in keeps both.
-@MainActor
+/// takes focus or clicks, so the app you're in keeps both. Used from the main thread only (not marked
+/// @MainActor, like AppDelegate, which calls it).
 final class Toast {
     private let panel = ShelfPanel()
     private var generation = 0
