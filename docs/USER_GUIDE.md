@@ -18,13 +18,14 @@ a moment to see every ⌘ shortcut there, and the numbers ⌘1–⌘9 on the fir
 
 ## All shortcuts
 
-These work while the shelf is open, except the first two, which work anywhere. Both can be changed in
-**Settings** (⌘,).
+These work while the shelf is open, except the first three, which work anywhere. Those can be changed
+in **Settings** (⌘,).
 
 | Shortcut | What it does |
 |---|---|
 | ⇧⌘V | Open or close the shelf |
 | ⌥⇧⌘V | Paste the copy before the last one, without opening the shelf (press again to swap back) |
+| ⇧⌘2 | Grab text from screen: drag over anything, and the text in it is copied (see below) |
 | Type anything | Search text, links, file names, the app it came from, and text inside screenshots. `from:slack` and `@today` narrow it down (see Finding things) |
 | ← → | Previous / next card |
 | ⌘← ⌘→ | First / last card |
@@ -79,6 +80,7 @@ shown next to one, or click it. The card itself stays as it was.
 | Any text | UPPERCASE (U), lowercase (L), Capitalize Words (C), Trim Whitespace (W): removes trailing spaces, the indentation all lines share, and extra blank lines; Join Lines (J): one line, for text copied from a PDF; Format JSON (P): indents JSON, keeping its key order |
 | Link | Remove Tracking from Link (R): drops `utm_…`, `fbclid`, `gclid` and similar parameters |
 | Image | Paste Text in Image (T): the text Shelf recognized in it |
+| Text with several lines | Paste Lines One by One (S): each ⌘V pastes the next line (see Paste stack) |
 | Files | Paste File Paths (P), Paste File Names (N) |
 
 Every card also has **Copy as File…** (E).
@@ -95,7 +97,7 @@ Press **Return** on an image or file card and a small box opens just above it:
 - **Size:** Original, 75%, 50% or 25%, and **Quality** for JPEG and HEIC.
 - Under them, the result, such as "invoice.jpg · 861 × 539 · 180 KB", next to what the card is now,
   so you can see the size before you send it.
-- **Blur & Crop** (⌘E), for a single image: see below.
+- **Markup** (⌘E), for a single image: arrows, boxes, highlights, text, blur and crop. See below.
 
 **Keyboard:** **Tab** and **⇧Tab** move between Name, Format, Size and Quality (a blue ring shows
 which). On Format, Size or Quality, **← →** (or **↑ ↓**) change it: the next format, a smaller or
@@ -113,28 +115,31 @@ extension, such as `deploy.sh` or `data.csv`.
 Don't want the box on Return? Turn off **Ask before pasting images and files** in Settings; ⌘R still
 opens it.
 
-### Blur & Crop
+### Markup: arrows, text, blur and crop
 
-To hide a name, an email address or a key in a screenshot before you send it, press **⌘E** in the box
-(or click **Blur & Crop**). The box grows to show the image:
+To point at something in a screenshot, or hide a name or a key before you send it, press **⌘E** in
+the box (or click **Markup**). The box grows to show the image. Pick a tool, then drag on the image:
 
-- **Blur** (B): drag over what to hide. It becomes large blocks of its own colors. Unlike a light blur,
-  the original can't be recovered from it. Drag again for more areas.
-- **Crop** (C): drag around what to keep. Dragging again replaces the crop.
-- **⌘Z** undoes the last step, **⌫** clears everything, **Return** is Done, **Esc** cancels.
+| Tool | Key | What it does |
+|---|---|---|
+| Arrow | A | Drag from where the arrow starts to what it points at |
+| Box | R | Drag around something to draw a box |
+| Highlight | H | Drag over text to highlight it, like a marker |
+| Text | T | Click where the text goes, type, then **Return** (Esc removes it) |
+| Blur | B | Drag over what to hide. It becomes large blocks of its own colors; unlike a light blur, the original can't be recovered from it |
+| Crop | C | Drag around what to keep. Dragging again replaces the crop |
 
-Back in the box, the line under the name says what you did ("2 areas hidden, cropped"), and Return
-pastes the edited image, ⌘C copies it and ⌘S saves it. The card in the shelf stays as it was. An edited
-image keeps its format if you chose one, otherwise it becomes a PNG.
+Arrows, boxes and text come in seven colors: click one, or press **1–7**. **⌘Z** undoes the last
+step, **⌫** clears everything, **Return** is Done and **Esc** cancels.
 
-Converting re-encodes the picture: its orientation is kept, other details such as where a photo was
-taken are left out. Renaming a JPEG or HEIC without resizing copies it unchanged. The files are made in
-Shelf's own folder and deleted after a day; the app you paste them into keeps its own copy. Shelf
-remembers the quality you used last.
+Back in the box, the line under the name says what you did ("2 marks, 1 area hidden, cropped"), and
+Return pastes the edited image, ⌘C copies it and ⌘S saves it. The card in the shelf stays as it was.
+An edited image keeps its format if you chose one, otherwise it becomes a PNG.
 
 ## Finding things
 
 - **Type** to search text, links, file names, the app something was copied from, and text in images.
+  Text you grabbed from the screen comes from "Text from Screen", so `from:screen` finds it.
 - **`from:` an app** keeps only what was copied there: `from:slack`, `from:chrome invoice`. Part of the
   name is enough.
 - **A date:** `@today`, `@yesterday`, `@week` (the last 7 days) or `@month` (the last 30). They combine:
@@ -188,6 +193,8 @@ over. They're numbered in the order you marked them, and the bar at the bottom s
 - **⌘J:** join them into one new card, a line each.
 - **⌘P:** pin them all (with several pinboards, pick one).
 - **⌘⌫:** delete them all. **⌘Z** brings them back.
+- **Drag** one of them out of the shelf to drag them all into Finder, Mail, Slack…: files and images as
+  files, links as links, text as text. A card holding several files drags every file the same way.
 
 **⌘Z** works for any delete, up to the last 20, while the shelf is open or after.
 
@@ -201,11 +208,30 @@ For filling forms or spreadsheets with several items in order:
 
 Copying something new ends the stack; you can also end it or skip an item from the menu bar.
 
+**From one card's lines:** for a list in a single card (names, order numbers, emails), press **⌘K**
+then **S** (Paste Lines One by One). Each line becomes a step of the stack, blank lines left out: the
+first line is pasted, and each ⌘V after that pastes the next.
+
 ## Paste the previous copy
 
 **⌥⇧⌘V**, anywhere, pastes what you copied before the last thing, without opening the shelf. Press it
 again to swap back: the one it pasted is now the newest. It pastes the way Return would in that app
 (formatted or plain text). Change or turn off the shortcut in Settings.
+
+## Grab text from screen
+
+Press **⇧⌘2** anywhere (or choose **Grab Text from Screen** in the Shelf menu), then drag over the
+part of the screen with the text, like taking a screenshot. Press Space first to pick a whole window,
+or Esc to cancel. Shelf reads the text on your Mac (English and Arabic), puts it on the clipboard and
+adds it to History; a message at the bottom of the screen says how many words it copied. Press **⌘V**
+to paste it.
+
+It works where you can't select text: a video, an image, a slide being shared, a locked PDF, an app's
+error message.
+
+The first time, macOS asks whether Shelf may record the screen: turn Shelf on in **System Settings →
+Privacy & Security → Screen & System Audio Recording**, then try again. Settings shows whether it's
+allowed. Change or turn off the shortcut in Settings.
 
 ## Screenshots
 
@@ -218,7 +244,8 @@ you changed it in the Screenshot app's Options); allow it.
   Screenshot app (⇧⌘5) → **Options** and turn off **Show Floating Thumbnail**.
 - Only files macOS marks as screenshots are added, not other images saved in that folder.
 - Don't want this? Turn off **Add screenshots** in Settings. Pause Capture also pauses it.
-- To hide something in a screenshot before sending it, press Return on it, then ⌘E (Blur & Crop).
+- To point at something in a screenshot, or hide something before sending it, press Return on it,
+  then ⌘E (Markup).
 
 ## Searching screenshots
 
@@ -242,10 +269,12 @@ bar icons that don't fit, and Shelf's may be one of them.
 
 **⌘,** in the shelf, or **Settings…** in the Shelf menu.
 
-- **Shortcuts:** click one and press the new keys (with ⌘, ⌥ or ⌃). It works at once; if another app
-  already has those keys, Shelf says so and keeps the old ones. ↺ goes back to the default, and
-  Paste previous copy can be turned off.
+- **Shortcuts:** Open Shelf, Paste previous copy and Grab text from screen. Click one and press the new
+  keys (with ⌘, ⌥ or ⌃). It works at once; if another app already has those keys, Shelf says so and
+  keeps the old ones. ↺ goes back to the default; ⓧ turns the last two off.
+- **Screen Recording:** whether Grab text from screen is allowed, with a button to allow it.
 - **Return pastes:** with formatting or plain text, and the apps you've set differently.
+- **Remove tracking from copied links:** see Privacy (on).
 - **Ask before pasting images and files:** Return opens the box to rename, resize, convert, blur or
   crop first (on).
 - **Auto-paste:** whether Shelf may press ⌘V for you, with a button to allow it.
@@ -268,6 +297,9 @@ bar icons that don't fit, and Shelf's may be one of them.
   password in them and card numbers get a 🔑 card that shows only its last four characters ("••••••••9f2c") and says
   when it will be deleted: after **5 minutes**, unless you pin it. Change the time, or turn it off, in
   Settings.
+- **Links are cleaned as you copy them.** Tracking added to links (`utm_source=…`, `fbclid`, `gclid`
+  and similar) is removed from the card and from the clipboard, so ⌘V pastes the clean link too. The
+  rest of the link stays as it was. Turn it off in Settings.
 - **Ignore apps you never want recorded.** Right-click a card → **Don't Record Copies from <app>**, or
   **Settings** → **Ignored apps** → **Add App…**. Cards already in History stay until you delete them (⌘⌫).
 - **Copied something you shouldn't have?** Shelf menu → **Forget Last 5 Minutes**, or delete the card
@@ -287,3 +319,4 @@ bar icons that don't fit, and Shelf's may be one of them.
 | ⇧⌘V does nothing | Another app owns the shortcut (often Paste). Pick a different one in **Settings** → **Shortcuts** (open it from the menu bar icon), or quit the other app. |
 | A copy is missing | Capture may be paused (menu bar), the app may be ignored (Settings), or the app marked the copy as temporary, which Shelf respects. A key or password is deleted after a few minutes unless pinned. |
 | Shelf isn't running after a restart | Turn on **Launch at login** in Settings. |
+| Grab text from screen finds nothing, or only the desktop picture | Shelf needs Screen Recording: System Settings → Privacy & Security → Screen & System Audio Recording → turn Shelf on, then try again. With a new beta, turn it off and on again. |

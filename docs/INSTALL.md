@@ -70,7 +70,8 @@ select Shelf, click **−**, then paste once and allow it again. Later updates k
 
 The default is **⇧⌘V**. To use another one, open **Settings** (menu bar icon → **Settings…**, or ⌘,
 in the shelf), click the shortcut next to **Open Shelf** and press the new keys. It works at once.
-Paste previous copy (**⌥⇧⌘V**) is changed or turned off the same way.
+Paste previous copy (**⌥⇧⌘V**) and Grab text from screen (**⇧⌘2**) are changed or turned off the
+same way.
 
 Shortcuts use ⌘, ⌥ or ⌃ (and ⇧ if you like) with a letter, a digit or Space.
 

@@ -32,7 +32,8 @@ shelf_clipboard/
     │                        paste style per app, OCR queue, menu bar
     ├── ShelfView.swift      SwiftUI: ShelfModel, shelf, filters, tabs, cards, bottom bar, preview, thumbnails
     ├── ExportView.swift     SwiftUI: the paste box (rename, resize, convert) and its arrow shape
-    ├── ImageEditorView.swift SwiftUI: Blur & Crop inside the paste box
+    ├── ImageEditorView.swift SwiftUI: Markup (arrows, boxes, highlights, text, blur, crop) in the paste box
+    ├── Toast.swift          The short message at the bottom of the screen (Grab Text from Screen)
     ├── SettingsView.swift   SwiftUI: the Settings window and SettingsModel (reads/writes UserDefaults)
     ├── PasteOptions.swift   Paste As options, text transforms, Markdown writer, hex colors (Foundation only)
     ├── ExportPlan.swift     Copy as File formats, file naming, paste box and editor state (Foundation only)
@@ -40,13 +41,13 @@ shelf_clipboard/
     ├── SecretScanner.swift  Spots API keys, tokens, passwords and card numbers (Foundation only)
     ├── SearchQuery.swift    Search syntax: from:app, @today, @week… (Foundation only)
     ├── Snippet.swift        {{date}}, {{clipboard}}… in pinned text (Foundation only)
-    ├── ShortcutSpec.swift   Parsing and showing shortcuts such as "cmd+shift+v" (Foundation only)
+    ├── ShortcutSpec.swift   Shortcuts such as "cmd+shift+v", and the global ones (GlobalShortcut) (Foundation only)
     ├── QuickLook.swift      File thumbnails (QuickLookThumbnailing) and the Quick Look preview of a file
     ├── ScreenshotWatcher.swift  Adds screenshot files from the screenshot folder to History
     ├── Store.swift          SQLite storage, data model, schema migration
     ├── Monitor.swift        Pasteboard polling and capture
     ├── HotKey.swift         Global shortcuts (Carbon RegisterEventHotKey)
-    ├── OCR.swift            On-device text recognition (Apple Vision)
+    ├── OCR.swift            On-device text recognition (Apple Vision); Grab Text from Screen
     └── Backup.swift         Pinboard export / import / daily auto-backup
 ```
 
@@ -114,14 +115,36 @@ scaled so the printed size stays the same) or copies files (an APFS clone) into
 (`markOwnChange()`) or are moved to a save panel's location. The form's size estimate encodes the image
 for real, off the main thread, 0.25 s after the settings stop changing.
 
-**Blur & Crop (⌘E in the box, ImageEditorView.swift).** `ExportDraft.editor` holds the tool, the edits
-to put back on Esc and an undo history; `ExportDraft.edits` (`ImageEdits`: blur rectangles and a crop,
-as fractions of the image from the top left) travels in `FileExport.Job`. `FileExport.apply` averages
-each blurred area in blocks (a third of the area's short side, between 1% and 4% of the image) straight
-in an RGBA buffer, then crops with `CGImage.cropping`, after the resize and before encoding. The editor
-shows a ≤1600 px copy run through the same function, so the preview is what the file will be. An
-edited image whose format is Keep Format is written as PNG (`outputFormat`). While the editor is open,
-`layoutExportForm` makes the box up to 640 × 480 and `handleImageEditorKey` takes every key.
+**Markup (⌘E in the box, ImageEditorView.swift).** `ExportDraft.editor` holds the tool, the color, the
+edits to put back on Esc, an undo history and the text mark being typed; `ExportDraft.edits`
+(`ImageEdits`: marks, blur rectangles and a crop, all as fractions of the image from the top left)
+travels in `FileExport.Job`. Drags arrive as `addDrag(from:to:)`; a Text click adds an empty mark and
+`typeText` / `finishTyping` fill it in (an empty one is dropped). `FileExport.apply` averages each
+blurred area in blocks (a third of the area's short side, between 1% and 4% of the image) straight in
+an RGBA buffer, draws the marks on the same context (Core Graphics; lines 0.35% and text 2.2% of the
+longest side; text with Core Text, outlined), then crops with `CGImage.cropping`, after the resize and
+before encoding. The editor shows a ≤1600 px copy run through the same function, so the preview is
+what the file will be. An edited image whose format is Keep Format is written as PNG (`outputFormat`).
+While the editor is open, `layoutExportForm` makes the box up to 640 × 480 and `handleImageEditorKey`
+takes every key, except while text is typed, when the field gets them.
+
+**Grab Text from Screen (⇧⌘2, OCR.swift, App.swift `grabText`).** Checks Screen Recording with
+`CGPreflightScreenCaptureAccess` (asking with `CGRequestScreenCaptureAccess` and opening the
+privacy pane if needed), then runs `/usr/sbin/screencapture -i -x` to a temporary PNG on a background
+queue, recognizes its text with the same Vision request as screenshots, deletes the file, puts the
+text on the clipboard (`markOwnChange()`) and records it as a card from "Text from Screen". `Toast`
+shows the result in a small non-activating panel.
+
+**Link cleaning.** `withoutTracking` runs on every captured link when `cleanLinks` is on (default):
+if `TextTools.removeTracking` changes it, the card stores the clean link and the clipboard is
+rewritten with it (`markOwnChange()`, so the Monitor doesn't record it twice).
+
+**Dragging several cards.** SwiftUI's `onDrag` carries one item, so `ShelfPanel.sendEvent` asks
+`ownsDrag` at each mouse-down whether the press is on a marked card (with two or more marked) or on a
+multi-file card; `severalToDrag` finds the card from `model.cardFrames` (each card reports its frame
+in the window, top-left origin). If so, the drag events are kept from SwiftUI and `dragSeveral` starts
+an AppKit `NSDraggingSession` with one `NSDraggingItem` per file, image (as a PNG file), link or text.
+Clicks still pass through.
 
 **Several cards.** Marked cards are `model.stack` (⌘S, ⇧-click, ⇧← ⇧→ via `extendMarks`). With some
 marked, ⌘P pins them all, ⌘⌫ deletes them all and ⌘J (`joinMarked`) makes one new text card from
@@ -154,7 +177,8 @@ pressing them would trigger them), a local key monitor takes the next key, and `
 registers both and reports whether each worked; one another app holds is put back. Closing the window
 hides Shelf so the previous app is frontmost again; `show()` unhides without activating.
 
-**Paste stack.** Stacked items are pasted one per ⌘V: Shelf pastes the first, then a global
+**Paste stack.** Stacked items (`beginStack`: the marked cards, or a card's lines for Paste Lines One
+by One, as in-memory cards that are never stored) are pasted one per ⌘V: Shelf pastes the first, then a global
 key-down monitor watches for the user's ⌘V and, 0.2 s later, puts the next item on the clipboard.
 
 **OCR (OCR.swift).** New images are queued; `VNRecognizeTextRequest` runs on a background queue
@@ -165,7 +189,9 @@ An empty string means "processed, no text", so images are not retried.
 Accessibility. One application event handler dispatches by hot key id, so several can be registered:
 `hotkey` (open the shelf, default `cmd+shift+v`) and `pastePreviousHotkey` (default
 `cmd+option+shift+v`, empty string = off), which pastes `store.all()[1]` in the frontmost app's style.
-Both are set in Settings; `registerHotKeys()` re-registers them (releasing a `HotKey` unregisters it).
+`grabTextHotkey` (default `cmd+shift+2`, empty = off) is the third. They're listed in `GlobalShortcut`,
+set in Settings, and `registerHotKeys()` re-registers them all and returns the ones another app holds
+(releasing a `HotKey` unregisters it).
 
 ## Data
 
@@ -178,7 +204,8 @@ Backups/         pinboards-YYYY-MM-DD.json, last 7 kept
 Exports/         <uuid>/<name>: files made by Copy as File and image drags, deleted after a day
 ```
 
-Settings (UserDefaults, `com.turkifaisal.shelf`): `hotkey`, `pastePreviousHotkey`, `historyDays`
+Settings (UserDefaults, `com.turkifaisal.shelf`): `hotkey`, `pastePreviousHotkey`, `grabTextHotkey`,
+`cleanLinks` (default on), `historyDays`
 (default 30, 0 = forever), `secretMinutes` (default 5, 0 = off), `addScreenshots`, `pastePlainByDefault`,
 `pasteStyleByApp` (bundle id → Bool, true = plain text), `askBeforePasting`, `ignoredApps`, and the last
 paste box choices `exportTextFormat`, `exportQuality`.
@@ -302,8 +329,6 @@ A new certificate is a new identity: every Mac has to grant Accessibility once m
 
 ## Ideas not yet built
 
-- Drag several files out at once (SwiftUI's `onDrag` carries a single item, so multi-file cards can't be
-  dragged yet; an AppKit `NSDraggingSession` could).
 - Copy as File for a link as a `.webloc`.
-- Blur & Crop for several images at once, and arrows to nudge a crop.
+- Markup for several images at once; moving or resizing a mark after it's drawn.
 - Signed and notarized betas from CI (needs the Developer ID and notary credentials as repository secrets).

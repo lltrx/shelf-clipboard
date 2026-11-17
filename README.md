@@ -54,16 +54,17 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 |---|---|
 | ⇧⌘V | Open / close the shelf (anywhere; change it in Settings) |
 | ⌥⇧⌘V | Anywhere: paste the copy before the last one without opening the shelf (again to swap back) |
+| ⇧⌘2 | Anywhere: **grab text from screen**: drag over anything; the text in it is recognized on the Mac and copied |
 | type | Search: text, links, file names, source app, and text inside screenshots. `from:slack`, `@today`, `@yesterday`, `@week`, `@month` narrow it down |
 | ← → (⌘← ⌘→) | Move selection (jump to ends) |
 | ↑ ↓ | Show only text, links, images or files (or click the icons next to search) |
 | Return / double-click | Paste: with formatting, or as plain text in apps you set that way. On an image or file, a small box opens first to rename, resize or convert it; Return again pastes |
 | ⇧Return | Paste the other way (plain text ↔ with formatting); on an image or file, paste it as it is, skipping the box |
-| ⌘K | **Paste As:** formatted, plain text, Markdown, UPPERCASE / lowercase / Capitalized, trimmed, joined lines, formatted JSON, link without tracking, text in an image, file paths or names |
+| ⌘K | **Paste As:** formatted, plain text, Markdown, UPPERCASE / lowercase / Capitalized, trimmed, joined lines, formatted JSON, link without tracking, text in an image, file paths or names, and **lines one by one** (each ⌘V pastes the next line) |
 | ⌘R | **Copy as File:** the same box for any card: name it and pick a format (PNG, JPEG, HEIC, TIFF, GIF, PDF · Plain Text, Markdown, RTF, Word, HTML), then paste (Return), copy (⌘C) or save (⌘S) it |
-| ⌘E in the box | **Blur & Crop** a single image: drag to hide an area (a mosaic) or to crop, ⌘Z undoes, Return is Done |
+| ⌘E in the box | **Markup** a single image: arrows (A), boxes (R), highlights (H), text (T), blur (B, a mosaic) and crop (C), colors 1–7, ⌘Z undoes, Return is Done |
 | ⌘1 … ⌘9 (⇧ for the other way) | Paste item 1–9 (hold ⌘ to see the numbers and every ⌘ shortcut) |
-| drag a card | Drop it into another app (images become a named PNG file) |
+| drag a card | Drop it into another app (images become a named PNG file). Dragging a marked card drags all the marked ones; a card with several files drags them all |
 | Space | Full preview (when the search field is empty); files open in Quick Look |
 | ⌘E | Edit in the preview, then ⌘Return to paste (⇧⌘Return plain) · Esc cancels |
 | ⌘C | Copy to clipboard without pasting |
@@ -109,6 +110,10 @@ Pinned text can hold **snippet placeholders**, filled in when it's pasted: `{{da
   links with a password, card numbers) are shown masked and deleted after 5 minutes unless pinned
   (Settings: 1 minute to never). **Forget Last 5 Minutes**, **Pause Capture** and **Clear Unpinned
   History…** are in the Shelf menu.
+- Tracking parameters (utm_…, fbclid, gclid…) are removed from links as they're copied, on the card
+  and the clipboard (Settings to turn off).
+- Grab Text from Screen uses the system screenshot tool and Apple Vision on the Mac; it needs Screen
+  Recording permission. The captured image is deleted right after the text is read.
 
 ## Backups
 
