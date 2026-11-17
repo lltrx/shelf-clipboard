@@ -51,6 +51,7 @@ final class ShelfModel: ObservableObject {
     @Published var appStyles: [String: Bool] = [:]   // bundle id → Return pastes plain text (true) or formatted there
     @Published var askBeforePasting = true      // Return on an image or file opens the paste box first
     @Published var popoverArrowX: CGFloat = 200 // where the paste box's arrow points, in the box
+    @Published var exportFocus: ExportField = .name   // the paste box control Tab is on
     var selectedCardMidX: CGFloat?              // the selected card's center in the shelf, for the paste box
 
     struct TargetApp: Equatable {

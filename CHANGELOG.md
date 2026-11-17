@@ -17,8 +17,9 @@ All notable changes to Shelf are documented here. The format is based on
   the card, with the name, a format menu (PNG, JPEG, HEIC, TIFF, GIF, PDF), the size (75%, 50%, 25%)
   and quality, and the result's real size next to the original's. Return again pastes: the original if
   nothing changed (so Return, Return is a normal paste), otherwise the new file. ⇧Return pastes the
-  original straight away; ⌘C copies, ⌘S saves. Turn it off with **Ask Before Pasting Images and
-  Files** in the Shelf menu.
+  original straight away; ⌘C copies, ⌘S saves. Tab moves between Name, Format, Size and Quality, and
+  the arrow keys change the one Tab is on. Turn it off with **Ask Before Pasting Images and Files** in
+  the Shelf menu.
 - **Copy as File (⌘R, or right-click):** the same box for any card. Text becomes a Plain Text (any
   extension you type, such as `deploy.sh`), Markdown, RTF, Word or HTML file. Renaming a JPEG or HEIC
   without resizing copies it unchanged.

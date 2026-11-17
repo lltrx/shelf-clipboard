@@ -34,6 +34,7 @@ struct ExportView: View {
                     .labelsHidden()
                     .pickerStyle(.menu)
                     .fixedSize()
+                    .overlay(focusRing(.format))
                 }
             }
             .frame(height: 28)
@@ -46,6 +47,7 @@ struct ExportView: View {
                             sizeButton(scale, draft)
                         }
                     }
+                    .overlay(focusRing(.size))
                     .disabled(!draft.showsImageOptions)
                     .opacity(draft.showsImageOptions ? 1 : 0.45)
                     .help(resizeTip(draft))
@@ -59,6 +61,7 @@ struct ExportView: View {
                         .labelsHidden()
                         .pickerStyle(.menu)
                         .fixedSize()
+                        .overlay(focusRing(.quality))
                         .transition(.opacity)
                     }
                 }
@@ -83,13 +86,16 @@ struct ExportView: View {
             Divider()
 
             HStack(spacing: 8) {
-                if draft.source != .text {
-                    HStack(spacing: 4) {
-                        Text("⇧↩").font(.system(size: 11, weight: .semibold))
-                        Text("Paste original").font(.system(size: 11))
+                HStack(spacing: 10) {
+                    ForEach(keyHints(draft), id: \.self) { hint in
+                        HStack(spacing: 4) {
+                            Text(hint.key).font(.system(size: 11, weight: .semibold))
+                            Text(hint.label).font(.system(size: 11))
+                        }
                     }
-                    .foregroundStyle(.secondary)
                 }
+                .foregroundStyle(.secondary)
+                .fixedSize()
                 if draft.busy { ProgressView().controlSize(.small).transition(.opacity) }
                 Spacer(minLength: 8)
                 Button("Save…") { model.actions?.finishExport(.save) }
@@ -113,6 +119,33 @@ struct ExportView: View {
             // After the panel has become key, so the name field really gets focus (text selected).
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { nameFocused = true }
         }
+        // Tab moves between the controls (handled in AppDelegate); the name field follows along.
+        .onChange(of: model.exportFocus) { nameFocused = model.exportFocus == .name }
+        .onChange(of: nameFocused) { if nameFocused { model.exportFocus = .name } }
+        .onChange(of: draft.format) {
+            if let now = model.exportDraft, !now.fields.contains(model.exportFocus) { model.exportFocus = .format }
+        }
+    }
+
+    /// The blue ring on the control Tab is on (the name field draws its own).
+    private func focusRing(_ field: ExportField) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .stroke(Color.accentColor, lineWidth: 2)
+            .padding(-3)
+            .opacity(model.exportFocus == field ? 1 : 0)
+            .allowsHitTesting(false)
+    }
+
+    /// The keys worth knowing where focus is now.
+    private func keyHints(_ draft: ExportDraft) -> [BoxHint] {
+        var hints: [BoxHint] = []
+        if model.exportFocus == .name {
+            if draft.source != .text { hints.append(BoxHint(key: "⇧↩", label: "Original")) }
+        } else {
+            hints.append(BoxHint(key: "← →", label: "Change"))
+        }
+        if draft.fields.count > 1 { hints.append(BoxHint(key: "⇥", label: "Next")) }
+        return hints
     }
 
     private func resizeTip(_ draft: ExportDraft) -> String {
@@ -197,6 +230,11 @@ struct ExportView: View {
         }.value
         original = [kind.isEmpty ? nil : kind, text.isEmpty ? nil : text].compactMap { $0 }.joined(separator: " · ")
     }
+}
+
+private struct BoxHint: Hashable {
+    let key: String
+    let label: String
 }
 
 /// A rounded box with an arrow on its bottom edge, pointing down at the card.

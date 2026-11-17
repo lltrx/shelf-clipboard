@@ -273,6 +273,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             return true
         case 8 where cmd: finishExport(.copy); return true                  // ⌘C
         case 1 where cmd: finishExport(.save); return true                  // ⌘S
+        case 48:                                                            // tab, ⇧tab: next control
+            if let draft = model.exportDraft {
+                model.exportFocus = draft.field(after: model.exportFocus, backward: e.modifierFlags.contains(.shift))
+            }
+            return true
+        case 123, 124, 125, 126:                                            // arrows change that control
+            // (A `where` here would only guard the last key code, so check inside.)
+            guard !cmd, model.exportFocus != .name else { return false }   // in the name: the text cursor
+            let arrow: ExportDraft.Arrow
+            switch e.keyCode {
+            case 123: arrow = .left
+            case 124: arrow = .right
+            case 125: arrow = .down
+            default: arrow = .up
+            }
+            model.exportDraft?.change(model.exportFocus, arrow)
+            if let draft = model.exportDraft, !draft.fields.contains(model.exportFocus) {
+                model.exportFocus = .format   // a format without quality: Quality is gone
+            }
+            return true
         default: return false
         }
     }
@@ -741,6 +761,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         }
         draft.startName = draft.name
         draft.startFormat = draft.format
+        model.exportFocus = .name
         if defaults.object(forKey: "exportQuality") != nil {
             draft.quality = ExportDraft.nearestQuality(defaults.double(forKey: "exportQuality"))
         }

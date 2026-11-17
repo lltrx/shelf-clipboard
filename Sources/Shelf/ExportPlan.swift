@@ -170,8 +170,11 @@ enum ExportNaming {
     }
 }
 
-/// The buttons of the Copy as File form: Return, ⌘C and ⌘S.
+/// The buttons of the paste box: Return, ⌘C and ⌘S.
 enum ExportAction { case paste, copy, save }
+
+/// The paste box's controls, in Tab order.
+enum ExportField: Equatable { case name, format, size, quality }
 
 /// The Copy as File form: what is being made, and the choices so far.
 struct ExportDraft: Equatable {
@@ -214,6 +217,47 @@ struct ExportDraft: Equatable {
 
     /// Height of the paste box in points, its arrow included: Size takes a row when there are images.
     var popoverHeight: Double { hasImages ? 193 : 156 }
+
+    // MARK: Keyboard
+
+    enum Arrow { case left, right, up, down }
+
+    /// The controls Tab moves through, as the box shows them now.
+    var fields: [ExportField] {
+        var fields: [ExportField] = [.name]
+        if formats.count > 1 { fields.append(.format) }
+        if showsImageOptions { fields.append(.size) }
+        if showsImageOptions && format.isLossy { fields.append(.quality) }
+        return fields
+    }
+
+    /// Tab (or ⇧Tab) from `field`, wrapping around.
+    func field(after field: ExportField, backward: Bool = false) -> ExportField {
+        let all = fields
+        guard let i = all.firstIndex(of: field) else { return .name }
+        return all[(i + (backward ? -1 : 1) + all.count) % all.count]
+    }
+
+    /// An arrow key on a control. Format: → ↓ next, ← ↑ previous (menu order). Size: → ↓ smaller,
+    /// ← ↑ bigger (the buttons' order). Quality: → ↑ higher, ← ↓ lower. Stops at the ends.
+    mutating func change(_ field: ExportField, _ arrow: Arrow) {
+        func step<T: Equatable>(_ list: [T], _ current: T, _ delta: Int) -> T {
+            guard let i = list.firstIndex(of: current) else { return list.first ?? current }
+            return list[min(max(i + delta, 0), list.count - 1)]
+        }
+        let forward = arrow == .right || arrow == .down
+        switch field {
+        case .name:
+            break
+        case .format:
+            format = step(formats, format, forward ? 1 : -1)
+        case .size:
+            scale = step(Self.scales, scale, forward ? 1 : -1)
+        case .quality:
+            let higher = arrow == .right || arrow == .up
+            quality = step(Self.qualities, quality, higher ? -1 : 1)   // the list runs from best to smallest
+        }
+    }
 
     var fileNames: [String] {
         ExportNaming.names(typed: name, originals: originals,

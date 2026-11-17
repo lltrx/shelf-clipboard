@@ -71,11 +71,12 @@ final class ExportNamingTests: XCTestCase {
                        "Image 2023-11-14 at 22.13.20")
     }
 
-    private func draft(_ originals: [String], _ convertible: [Bool], _ format: ExportFormat, name: String = "") -> ExportDraft {
+    private func draft(_ originals: [String], _ convertible: [Bool], _ format: ExportFormat, name: String = "",
+                       formats: [ExportFormat] = [.original, .jpeg]) -> ExportDraft {
         let item = ClipItem(id: 1, kind: .file, text: nil, image: nil, detail: nil, sourceBundle: nil, sourceName: nil,
                             created: Date(), board: nil, formatted: false, ocr: nil)
         return ExportDraft(item: item, source: .files, originals: originals, convertible: convertible,
-                           formats: [.original, .jpeg], name: name, format: format)
+                           formats: formats, name: name, format: format)
     }
 
     func testDraftNamesAndSummary() {
@@ -135,6 +136,46 @@ final class ExportNamingTests: XCTestCase {
         XCTAssertTrue(ExportDraft.qualities.contains(ExportDraft(item: ClipItem(id: 1, kind: .image, text: nil, image: nil,
             detail: nil, sourceBundle: nil, sourceName: nil, created: Date(), board: nil, formatted: false, ocr: nil),
             source: .image, originals: ["a.png"], convertible: [true], formats: [.png], name: "a", format: .png).quality))
+    }
+
+    func testTabGoesThroughTheControlsShown() {
+        var d = draft(["shot.png"], [true], .png, formats: [.png, .jpeg, .heic])
+        XCTAssertEqual(d.fields, [.name, .format, .size])
+        d.format = .jpeg
+        XCTAssertEqual(d.fields, [.name, .format, .size, .quality])
+        XCTAssertEqual(d.field(after: .name), .format)
+        XCTAssertEqual(d.field(after: .quality), .name)                 // wraps around
+        XCTAssertEqual(d.field(after: .name, backward: true), .quality)
+        XCTAssertEqual(draft(["a.pdf"], [false], .original, formats: [.original]).fields, [.name])   // nothing else to reach
+        XCTAssertEqual(draft(["a.png"], [true], .original).fields, [.name, .format])   // Keep Format: no Size
+    }
+
+    func testArrowsChangeTheFocusedControl() {
+        var d = draft(["shot.png"], [true], .png, formats: [.png, .jpeg, .heic])
+        d.change(.size, .right)
+        XCTAssertEqual(d.scale, 0.75)
+        d.change(.size, .right); d.change(.size, .right); d.change(.size, .right)
+        XCTAssertEqual(d.scale, 0.25)                                   // stops at the end
+        d.change(.size, .up)
+        XCTAssertEqual(d.scale, 0.5)
+
+        d.change(.format, .down)                                       // formats here: PNG, JPEG, HEIC
+        XCTAssertEqual(d.format, .jpeg)
+        d.change(.format, .right)
+        d.change(.format, .down)
+        XCTAssertEqual(d.format, .heic)                                // stops at the end
+        d.change(.format, .left)
+        XCTAssertEqual(d.format, .jpeg)
+
+        d.format = .jpeg
+        d.quality = 0.8
+        d.change(.quality, .right)
+        XCTAssertEqual(d.quality, 0.9, accuracy: 0.001)
+        d.change(.quality, .down)
+        d.change(.quality, .left)
+        XCTAssertEqual(d.quality, 0.7, accuracy: 0.001)
+        d.change(.name, .left)                                         // the text field's own business
+        XCTAssertEqual(d.quality, 0.7, accuracy: 0.001)
     }
 
     func testFormatExtensions() {

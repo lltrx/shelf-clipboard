@@ -91,6 +91,10 @@ Press **Return** on an image or file card and a small box opens just above it:
 - Under them, the result, such as "invoice.jpg · 861 × 539 · 180 KB", next to what the card is now,
   so you can see the size before you send it.
 
+**Keyboard:** **Tab** and **⇧Tab** move between Name, Format, Size and Quality (a blue ring shows
+which). On Format, Size or Quality, **← →** (or **↑ ↓**) change it: the next format, a smaller or
+bigger size, higher or lower quality. In the Name field the arrows move the text cursor as usual.
+
 Then **Return** pastes it into the app you were in (a Finder window, Mail, Slack, Messages…), **⌘C**
 copies it, **⌘S** saves it somewhere, and **Esc** goes back. If you changed nothing, Return pastes the
 card exactly as before, so **Return, Return** is a normal paste. **⇧Return** pastes the original
