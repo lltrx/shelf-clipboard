@@ -68,13 +68,11 @@ select Shelf, click **−**, then paste once and allow it again. Later updates k
 
 ## Changing the shortcut
 
-The default is **⇧⌘V**. To use another one, run this in Terminal, then quit and reopen Shelf:
+The default is **⇧⌘V**. To use another one, open **Settings** (menu bar icon → **Settings…**, or ⌘,
+in the shelf), click the shortcut next to **Open Shelf** and press the new keys. It works at once.
+Paste previous copy (**⌥⇧⌘V**) is changed or turned off the same way.
 
-```sh
-defaults write com.turkifaisal.shelf hotkey "cmd+option+v"
-```
-
-Use any combination of `cmd`, `option`, `shift`, `ctrl` plus a letter, a digit, or `space`.
+Shortcuts use ⌘, ⌥ or ⌃ (and ⇧ if you like) with a letter, a digit or Space.
 
 ## Moving to a new Mac
 
@@ -86,7 +84,7 @@ Only pinboards move this way. History expires after 30 days anyway.
 
 ## Uninstalling
 
-1. Menu bar icon → turn off **Launch at Login**, then **Quit Shelf**.
+1. Menu bar icon → **Settings…** → turn off **Launch at login**, then menu bar icon → **Quit Shelf**.
 2. Move **Shelf.app** to the Trash.
 3. Remove it from **System Settings → Privacy & Security → Accessibility** (select it, click **−**).
 4. To also delete your clipboard history, pinboards and backups, delete this folder:

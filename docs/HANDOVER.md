@@ -24,21 +24,28 @@ shelf_clipboard/
 ├── Resources/AppIcon.icns   App icon (generated)
 ├── scripts/make_icon.swift  Draws the icon and builds the .icns
 ├── docs/                    USER_GUIDE, INSTALL, HANDOVER (this file)
-├── Tests/ShelfTests/        XCTest unit tests: Store, Monitor, Backup, ShelfModel, Paste As, export naming
+├── Tests/ShelfTests/        XCTest unit tests: Store, Monitor, Backup, ShelfModel, Paste As, export naming,
+│                            image edits, screenshots, secrets, search, snippets, shortcuts
 └── Sources/Shelf/
     ├── main.swift           Entry point; accessory activation policy
     ├── App.swift            AppDelegate: panels, keyboard, paste, Paste As, Copy as File, stack, pinboards,
     │                        paste style per app, OCR queue, menu bar
     ├── ShelfView.swift      SwiftUI: ShelfModel, shelf, filters, tabs, cards, bottom bar, preview, thumbnails
     ├── ExportView.swift     SwiftUI: the paste box (rename, resize, convert) and its arrow shape
+    ├── ImageEditorView.swift SwiftUI: Blur & Crop inside the paste box
+    ├── SettingsView.swift   SwiftUI: the Settings window and SettingsModel (reads/writes UserDefaults)
     ├── PasteOptions.swift   Paste As options, text transforms, Markdown writer, hex colors (Foundation only)
-    ├── ExportPlan.swift     Copy as File formats, file naming, form state (Foundation only)
-    ├── FileExport.swift     Image conversion (ImageIO), writing exports, pruning the Exports folder
+    ├── ExportPlan.swift     Copy as File formats, file naming, paste box and editor state (Foundation only)
+    ├── FileExport.swift     Image conversion (ImageIO), blur/crop, writing exports, pruning the Exports folder
+    ├── SecretScanner.swift  Spots API keys, tokens, passwords and card numbers (Foundation only)
+    ├── SearchQuery.swift    Search syntax: from:app, @today, @week… (Foundation only)
+    ├── Snippet.swift        {{date}}, {{clipboard}}… in pinned text (Foundation only)
+    ├── ShortcutSpec.swift   Parsing and showing shortcuts such as "cmd+shift+v" (Foundation only)
     ├── QuickLook.swift      File thumbnails (QuickLookThumbnailing) and the Quick Look preview of a file
     ├── ScreenshotWatcher.swift  Adds screenshot files from the screenshot folder to History
     ├── Store.swift          SQLite storage, data model, schema migration
     ├── Monitor.swift        Pasteboard polling and capture
-    ├── HotKey.swift         Global shortcut (Carbon RegisterEventHotKey)
+    ├── HotKey.swift         Global shortcuts (Carbon RegisterEventHotKey)
     ├── OCR.swift            On-device text recognition (Apple Vision)
     └── Backup.swift         Pinboard export / import / daily auto-backup
 ```
@@ -107,6 +114,46 @@ scaled so the printed size stays the same) or copies files (an APFS clone) into
 (`markOwnChange()`) or are moved to a save panel's location. The form's size estimate encodes the image
 for real, off the main thread, 0.25 s after the settings stop changing.
 
+**Blur & Crop (⌘E in the box, ImageEditorView.swift).** `ExportDraft.editor` holds the tool, the edits
+to put back on Esc and an undo history; `ExportDraft.edits` (`ImageEdits`: blur rectangles and a crop,
+as fractions of the image from the top left) travels in `FileExport.Job`. `FileExport.apply` averages
+each blurred area in blocks (a third of the area's short side, between 1% and 4% of the image) straight
+in an RGBA buffer, then crops with `CGImage.cropping`, after the resize and before encoding. The editor
+shows a ≤1600 px copy run through the same function, so the preview is what the file will be. An
+edited image whose format is Keep Format is written as PNG (`outputFormat`). While the editor is open,
+`layoutExportForm` makes the box up to 640 × 480 and `handleImageEditorKey` takes every key.
+
+**Several cards.** Marked cards are `model.stack` (⌘S, ⇧-click, ⇧← ⇧→ via `extendMarks`). With some
+marked, ⌘P pins them all, ⌘⌫ deletes them all and ⌘J (`joinMarked`) makes one new text card from
+them. Deletes go through `deleteItems`, which keeps an `ItemSnapshot` of each card (content, formats,
+board, OCR, expiry) in `undoGroups` (the last 20); ⌘Z (`undoDelete`) restores the newest group with
+`Store.restore`, at their original dates.
+
+**Secrets (SecretScanner.swift).** Each new text or link capture is checked with a few regular
+expressions (private keys, AWS/GitHub/Slack/Google/Stripe/OpenAI/Anthropic keys, JWTs,
+`password=…`, URLs with a password) and a Luhn check for card numbers. A match sets `items.expires` to
+now + `secretMinutes` (default 5, 0 = off); `Store.deleteExpired` runs every 30 s, and pinning clears
+the expiry. Cards that are secrets show `SecretScanner.masked` and a countdown instead of the text.
+**Forget Last 5 Minutes** (`Store.deleteRecent`) deletes unpinned cards created since then.
+
+**Search (SearchQuery.swift).** `from:` and `@today` / `@yesterday` / `@week` / `@month` tokens are
+taken out of the query; the remaining words are matched as one phrase against text, OCR text, app name
+and kind. `ShelfModel.filtered` builds a `SearchQuery` with `model.now`.
+
+**Snippets (Snippet.swift).** When a *pinned* text or link card is pasted, `{{date}}`, `{{time}}`,
+`{{datetime}}`, `{{isodate}}`, `{{clipboard}}` (the clipboard at that moment) and `{{uuid}}` are
+filled in (`Snippet.expand`). Unpinned cards are never expanded, so copied code keeps its braces.
+
+**Settings (SettingsView.swift).** A normal titled window, created on first use (`showSettings`).
+`SettingsModel` reads and writes the same UserDefaults keys the app uses and calls
+`settingsChanged()`, which refreshes the app's cached copies (`model.plainEverywhere`,
+`askBeforePasting`, `appStyles`, `monitor.ignoredApps`, the screenshot watcher) and prunes at once if
+the history length changed. It re-renders on `UserDefaults.didChangeNotification`, so it always shows
+what's in effect. Recording a shortcut: `pauseShortcuts()` lets the current hot keys go (otherwise
+pressing them would trigger them), a local key monitor takes the next key, and `applyShortcuts()`
+registers both and reports whether each worked; one another app holds is put back. Closing the window
+hides Shelf so the previous app is frontmost again; `show()` unhides without activating.
+
 **Paste stack.** Stacked items are pasted one per ⌘V: Shelf pastes the first, then a global
 key-down monitor watches for the user's ⌘V and, 0.2 s later, puts the next item on the clipboard.
 
@@ -114,8 +161,11 @@ key-down monitor watches for the user's ⌘V and, 0.2 s later, puts the next ite
 (English and Arabic where supported). Results go into `items.ocr` and are searched like text.
 An empty string means "processed, no text", so images are not retried.
 
-**Shortcut (HotKey.swift).** Carbon `RegisterEventHotKey`, which does not need Accessibility.
-Configurable via `defaults write com.turkifaisal.shelf hotkey "cmd+shift+v"`.
+**Shortcuts (HotKey.swift, ShortcutSpec.swift).** Carbon `RegisterEventHotKey`, which does not need
+Accessibility. One application event handler dispatches by hot key id, so several can be registered:
+`hotkey` (open the shelf, default `cmd+shift+v`) and `pastePreviousHotkey` (default
+`cmd+option+shift+v`, empty string = off), which pastes `store.all()[1]` in the frontmost app's style.
+Both are set in Settings; `registerHotKeys()` re-registers them (releasing a `HotKey` unregisters it).
 
 ## Data
 
@@ -128,20 +178,22 @@ Backups/         pinboards-YYYY-MM-DD.json, last 7 kept
 Exports/         <uuid>/<name>: files made by Copy as File and image drags, deleted after a day
 ```
 
-Settings (UserDefaults, `com.turkifaisal.shelf`): `hotkey`, `addScreenshots`, `pastePlainByDefault`, `pasteStyleByApp`
-(bundle id → Bool, true = plain text), `askBeforePasting`, `ignoredApps`, and the last paste box choices
-`exportTextFormat`, `exportQuality`.
+Settings (UserDefaults, `com.turkifaisal.shelf`): `hotkey`, `pastePreviousHotkey`, `historyDays`
+(default 30, 0 = forever), `secretMinutes` (default 5, 0 = off), `addScreenshots`, `pastePlainByDefault`,
+`pasteStyleByApp` (bundle id → Bool, true = plain text), `askBeforePasting`, `ignoredApps`, and the last
+paste box choices `exportTextFormat`, `exportQuality`.
 
-Schema (`PRAGMA user_version = 2`):
+Schema (`PRAGMA user_version = 3`):
 
 | Table | Columns |
 |---|---|
-| `items` | `id`, `kind` (text/link/image/file), `text` (content, or newline-separated paths), `image` (PNG filename), `detail` (e.g. "1920 × 1080"), `hash` (unique), `source_bundle`, `source_name`, `created` (Unix time; last copied or pasted), `pinned` (0/1, kept in step with `board`), `board` (pinboard id or NULL), `ocr` |
+| `items` | `id`, `kind` (text/link/image/file), `text` (content, or newline-separated paths), `image` (PNG filename), `detail` (e.g. "1920 × 1080"), `hash` (unique), `source_bundle`, `source_name`, `created` (Unix time; last copied or pasted), `pinned` (0/1, kept in step with `board`), `board` (pinboard id or NULL), `ocr`, `expires` (Unix time a secret is deleted, or NULL) |
 | `formats` | `item_id`, `type` (pasteboard UTI), `data` (blob) — rich-text representations |
 | `boards` | `id`, `name`, `position` |
 
 Rules:
-- Unpinned items older than 30 days are deleted at launch and hourly (`Store.prune`), with their images.
+- Unpinned items older than `historyDays` (30 unless changed) are deleted at launch, hourly and when the
+  setting changes (`Store.prune`), with their images. Secrets past `expires` are deleted every 30 s.
 - Deleting a pinboard moves its items to History with a fresh 30 days.
 - Migrations live in `Store.migrate()`, gated on `user_version`. Add a new `if version < N` step;
   never edit an existing one.
@@ -222,7 +274,7 @@ If macOS asks whether `codesign` may use a key, choose **Always Allow**.
 | Symptom | Cause and fix |
 |---|---|
 | Accessibility prompt on every paste although Shelf is enabled | The permission entry belongs to an old signature. Run `tccutil reset Accessibility com.turkifaisal.shelf`, then paste once and allow it. |
-| ⇧⌘V does nothing | Another app registered it first (Paste does). Quit that app, then relaunch Shelf. |
+| ⇧⌘V does nothing | Another app registered it first (Paste does). Pick another shortcut in Settings, or quit that app and relaunch Shelf. |
 | `security import` fails with "MAC verification failed" | Homebrew OpenSSL 3 creates PKCS#12 files the keychain can't read. Add `-legacy` to `openssl pkcs12 -export`. |
 | Build hangs at `codesign` | A keychain prompt is waiting on screen. Choose **Always Allow**. |
 | Searching a fresh screenshot finds nothing | OCR runs in the background; give it a few seconds. |
@@ -250,7 +302,8 @@ A new certificate is a new identity: every Mac has to grant Accessibility once m
 
 ## Ideas not yet built
 
-- Combine several cards into one.
 - Drag several files out at once (SwiftUI's `onDrag` carries a single item, so multi-file cards can't be
   dragged yet; an AppKit `NSDraggingSession` could).
 - Copy as File for a link as a `.webloc`.
+- Blur & Crop for several images at once, and arrows to nudge a crop.
+- Signed and notarized betas from CI (needs the Developer ID and notary credentials as repository secrets).

@@ -18,12 +18,14 @@ a moment to see every ⌘ shortcut there, and the numbers ⌘1–⌘9 on the fir
 
 ## All shortcuts
 
-These work while the shelf is open.
+These work while the shelf is open, except the first two, which work anywhere. Both can be changed in
+**Settings** (⌘,).
 
 | Shortcut | What it does |
 |---|---|
 | ⇧⌘V | Open or close the shelf |
-| Type anything | Search text, links, file names, the app it came from, and text inside screenshots |
+| ⌥⇧⌘V | Paste the copy before the last one, without opening the shelf (press again to swap back) |
+| Type anything | Search text, links, file names, the app it came from, and text inside screenshots. `from:slack` and `@today` narrow it down (see Finding things) |
 | ← → | Previous / next card |
 | ⌘← ⌘→ | First / last card |
 | ↑ ↓ | Show only text, links, images or files, then everything again |
@@ -38,8 +40,12 @@ These work while the shelf is open.
 | ⌘P | Pin or unpin |
 | ⌘N | New pinboard |
 | Tab / ⇧Tab | Next / previous tab (History, then each pinboard) |
-| ⌘S | Add to or remove from the paste stack |
-| ⌘⌫ | Delete the card |
+| ⌘S, ⇧-click | Mark the card (for the paste stack, or to act on several cards) |
+| ⇧← ⇧→ | Mark the cards you move over |
+| ⌘J | Join the marked cards into one, a line each |
+| ⌘⌫ | Delete the card, or the marked cards |
+| ⌘Z | Bring back the cards you just deleted |
+| ⌘, | Settings |
 | Esc | Close the preview, then the shelf |
 
 Right-click any card for the same actions with the mouse. You can also **drag a card** out of the shelf
@@ -51,17 +57,16 @@ into another app: text, links and files arrive as they are, and images arrive as
 Text copied from Word, Outlook, Notes or a browser keeps its fonts, bold, links and tables.
 **Return** pastes it formatted, **⇧Return** pastes plain text. Formatted cards say "Formatted" at the bottom.
 
-**Choose the default.** In the Shelf menu (menu bar icon, or **⋯** / **⌘,** in the shelf), **Paste
-Style** → **Return pastes** sets what Return, ⌘1…9 and double-click paste: **With Formatting** or
-**Plain Text**. ⇧ always pastes the other way. Cells copied from a spreadsheet paste as plain text
+**Choose the default.** In **Settings** (⌘, in the shelf, or Settings… in the Shelf menu), **Return
+pastes** sets what Return, ⌘1…9 and double-click paste: **With formatting** or **Plain text**. ⇧ always pastes the other way. Cells copied from a spreadsheet paste as plain text
 separated by tabs, one row per line.
 
 **Choose per app.** The bottom right of the shelf says what Return pastes in the app you're pasting
 into, for example **Excel: Plain Text** or **Word: Formatted**. Click it and pick **With Formatting** or
 **Plain Text**; Shelf remembers it for that app, so you can paste plain text into Excel, Terminal and
 Slack and keep formatting in Word and Mail without thinking about it. ⇧Return still pastes the other way.
-The same menu also sets the default for every other app. The apps you've set are listed under **Paste
-Style** in the Shelf menu; click one to make it follow the default again.
+The same menu also sets the default for every other app. The apps you've set are listed in Settings
+under **Return pastes**; click ⓧ next to one to make it follow the default again.
 
 ## Paste As (⌘K)
 
@@ -90,6 +95,7 @@ Press **Return** on an image or file card and a small box opens just above it:
 - **Size:** Original, 75%, 50% or 25%, and **Quality** for JPEG and HEIC.
 - Under them, the result, such as "invoice.jpg · 861 × 539 · 180 KB", next to what the card is now,
   so you can see the size before you send it.
+- **Blur & Crop** (⌘E), for a single image: see below.
 
 **Keyboard:** **Tab** and **⇧Tab** move between Name, Format, Size and Quality (a blue ring shows
 which). On Format, Size or Quality, **← →** (or **↑ ↓**) change it: the next format, a smaller or
@@ -104,8 +110,22 @@ straight away, in the shelf or in the box.
 included: turn a snippet into `notes.md` or a Word document. With Plain Text you can type any
 extension, such as `deploy.sh` or `data.csv`.
 
-Don't want the box on Return? Turn off **Ask Before Pasting Images and Files** in the Shelf menu; ⌘R
-still opens it.
+Don't want the box on Return? Turn off **Ask before pasting images and files** in Settings; ⌘R still
+opens it.
+
+### Blur & Crop
+
+To hide a name, an email address or a key in a screenshot before you send it, press **⌘E** in the box
+(or click **Blur & Crop**). The box grows to show the image:
+
+- **Blur** (B): drag over what to hide. It becomes large blocks of its own colors. Unlike a light blur,
+  the original can't be recovered from it. Drag again for more areas.
+- **Crop** (C): drag around what to keep. Dragging again replaces the crop.
+- **⌘Z** undoes the last step, **⌫** clears everything, **Return** is Done, **Esc** cancels.
+
+Back in the box, the line under the name says what you did ("2 areas hidden, cropped"), and Return
+pastes the edited image, ⌘C copies it and ⌘S saves it. The card in the shelf stays as it was. An edited
+image keeps its format if you chose one, otherwise it becomes a PNG.
 
 Converting re-encodes the picture: its orientation is kept, other details such as where a photo was
 taken are left out. Renaming a JPEG or HEIC without resizing copies it unchanged. The files are made in
@@ -115,6 +135,10 @@ remembers the quality you used last.
 ## Finding things
 
 - **Type** to search text, links, file names, the app something was copied from, and text in images.
+- **`from:` an app** keeps only what was copied there: `from:slack`, `from:chrome invoice`. Part of the
+  name is enough.
+- **A date:** `@today`, `@yesterday`, `@week` (the last 7 days) or `@month` (the last 30). They combine:
+  `from:mail @week total`.
 - **↑ ↓**, or the icons next to the search field, show only **text**, **links**, **images** or **files**.
   It combines with search and with pinboards.
 - Text cards that are just a color code like `#1E90FF` show the color.
@@ -129,6 +153,22 @@ Pinned cards never expire. Group them into named pinboards, such as "Code comman
 - **Switch:** press **Tab** to move between History and each pinboard.
 - **Rename or delete:** right-click the pinboard's tab. Deleting a pinboard moves its cards back to History; nothing is lost.
 
+### Snippets
+
+Pinned text can hold placeholders that are filled in when you paste it:
+
+| Placeholder | Becomes |
+|---|---|
+| `{{date}}` | Today's date, as your Mac shows dates (Nov 17, 2026) |
+| `{{time}}` | The time (14:05) |
+| `{{datetime}}` | Both |
+| `{{isodate}}` | 2026-11-17 |
+| `{{clipboard}}` | What's on the clipboard right now |
+| `{{uuid}}` | A new random ID |
+
+For example, pin `Hi {{clipboard}}, thanks for your order of {{date}}.` and copy a name before pasting
+it. Only pinned cards are filled in, so copied code that happens to contain `{{…}}` pastes unchanged.
+
 ## Preview and edit
 
 - **Space** opens a large preview above the shelf: the full text with formatting, the full image
@@ -138,17 +178,34 @@ Pinned cards never expire. Group them into named pinboards, such as "Code comman
 - **⌘E** makes the text editable. Then **⌘Return** pastes your edited version, **⇧⌘Return** pastes it
   as plain text, and **Esc** cancels. The edited version is saved as a new card; the original stays.
 
-## Paste stack
+## Several cards at once
+
+Mark cards with **⌘S** (the selection moves on), **⇧-click**, or **⇧← ⇧→** to mark the cards you move
+over. They're numbered in the order you marked them, and the bar at the bottom shows what you can do:
+
+- **Return:** the paste stack (below).
+- **⌥Return:** paste them all at once, one per line.
+- **⌘J:** join them into one new card, a line each.
+- **⌘P:** pin them all (with several pinboards, pick one).
+- **⌘⌫:** delete them all. **⌘Z** brings them back.
+
+**⌘Z** works for any delete, up to the last 20, while the shelf is open or after.
+
+### Paste stack
 
 For filling forms or spreadsheets with several items in order:
 
-1. Select a card and press **⌘S**. It is marked "Stack 1" and the selection moves to the next card.
-   Keep pressing ⌘S (or move with ← →) to add more, in the order you want them.
+1. Mark the cards in the order you want them.
 2. Press **Return**. The first item is pasted.
 3. Each time you press **⌘V** after that, the next item is pasted. The menu bar shows progress, e.g. `2/5`.
 
-**⌥Return** instead pastes all stacked items at once, one per line. Copying something new ends the
-stack; you can also end it or skip an item from the menu bar.
+Copying something new ends the stack; you can also end it or skip an item from the menu bar.
+
+## Paste the previous copy
+
+**⌥⇧⌘V**, anywhere, pastes what you copied before the last thing, without opening the shelf. Press it
+again to swap back: the one it pasted is now the newest. It pastes the way Return would in that app
+(formatted or plain text). Change or turn off the shortcut in Settings.
 
 ## Screenshots
 
@@ -160,7 +217,8 @@ you changed it in the Screenshot app's Options); allow it.
 - They arrive a few seconds after you take them, when macOS saves the file. For no delay, open the
   Screenshot app (⇧⌘5) → **Options** and turn off **Show Floating Thumbnail**.
 - Only files macOS marks as screenshots are added, not other images saved in that folder.
-- Don't want this? Turn off **Add Screenshots** in the Shelf menu. Pause Capture also pauses it.
+- Don't want this? Turn off **Add screenshots** in Settings. Pause Capture also pauses it.
+- To hide something in a screenshot before sending it, press Return on it, then ⌘E (Blur & Crop).
 
 ## Searching screenshots
 
@@ -169,19 +227,34 @@ appears in a screenshot finds it. Image cards with recognized text say "Contains
 
 ## Menu bar
 
-Click the clipboard icon in the menu bar, or the **⋯** button at the top right of the shelf (⌘,),
-for the menu below. The ⋯ button is handy when your menu bar is crowded: on Macs with a notch, macOS
-hides menu bar icons that don't fit, and Shelf's may be one of them.
+Click the clipboard icon in the menu bar, or the **⋯** button at the top right of the shelf, for the
+menu below. The ⋯ button is handy when your menu bar is crowded: on Macs with a notch, macOS hides menu
+bar icons that don't fit, and Shelf's may be one of them.
 
 - **Pause Capture:** stop recording copies (and screenshots) until you turn it back on.
-- **Add Screenshots:** put new screenshots in the shelf (on unless you turn it off).
-- **Ask Before Pasting Images and Files:** Return opens the rename/resize/convert box first (on).
-- **Paste Style:** what Return pastes by default (With Formatting or Plain Text), and the apps you've
-  set differently; click one to make it follow the default again.
-- **Launch at Login:** start Shelf automatically.
+- **Settings…** (⌘,): see below.
 - **Export Pinboards… / Import Pinboards…:** save your pinboards to a file, or bring them back.
 - **Show History Folder:** where everything is stored.
+- **Forget Last 5 Minutes:** delete what you copied in the last five minutes (pinned cards stay).
 - **Clear Unpinned History…:** delete everything except pinned cards.
+
+## Settings
+
+**⌘,** in the shelf, or **Settings…** in the Shelf menu.
+
+- **Shortcuts:** click one and press the new keys (with ⌘, ⌥ or ⌃). It works at once; if another app
+  already has those keys, Shelf says so and keeps the old ones. ↺ goes back to the default, and
+  Paste previous copy can be turned off.
+- **Return pastes:** with formatting or plain text, and the apps you've set differently.
+- **Ask before pasting images and files:** Return opens the box to rename, resize, convert, blur or
+  crop first (on).
+- **Auto-paste:** whether Shelf may press ⌘V for you, with a button to allow it.
+- **Keep history for:** 1 week, 2 weeks, 1 month (the default), 3 months, 1 year or forever. Pinned
+  cards are always kept. A shorter time deletes older cards right away.
+- **Delete passwords and keys after:** 1, 5 (the default) or 15 minutes, 1 hour, or never. See Privacy.
+- **Add screenshots:** put new screenshots in the shelf (on).
+- **Ignored apps:** apps whose copies are never recorded. **Add App…**, or ⓧ to record one again.
+- **Launch at login:** start Shelf automatically.
 
 ## Privacy and storage
 
@@ -190,12 +263,16 @@ hides menu bar icons that don't fit, and Shelf's may be one of them.
   similar apps mark the passwords they copy as concealed; Shelf skips those. ⌘V still pastes them as
   usual. While one is on the clipboard, the first card in History is a 🔒 **Password** card (the
   password itself is never shown); Return on it pastes the password.
+- **Keys, tokens and passwords copied from ordinary text are spotted and deleted.** API keys (OpenAI,
+  Anthropic, GitHub, AWS, Stripe, Slack, Google), private keys, JWTs, `password=…` lines, links with a
+  password in them and card numbers get a 🔑 card that shows only its last four characters ("••••••••9f2c") and says
+  when it will be deleted: after **5 minutes**, unless you pin it. Change the time, or turn it off, in
+  Settings.
 - **Ignore apps you never want recorded.** Right-click a card → **Don't Record Copies from <app>**, or
-  menu bar icon → **Ignored Apps** → **Add App…**. Click an app in that list to record it again.
-  Cards already in History stay until you delete them (⌘⌫).
-- **Everything else you copy is recorded**, including passwords you copy from ordinary text. Use
-  **Pause Capture** before copying something sensitive, or delete the card afterwards with ⌘⌫.
-- History is kept for **30 days**. Pinned cards are kept forever.
+  **Settings** → **Ignored apps** → **Add App…**. Cards already in History stay until you delete them (⌘⌫).
+- **Copied something you shouldn't have?** Shelf menu → **Forget Last 5 Minutes**, or delete the card
+  with ⌘⌫. **Pause Capture** before copying something sensitive keeps it out altogether.
+- History is kept for **30 days** unless you change it in Settings. Pinned cards are kept forever.
 - Pinboards are backed up automatically once a day to the `Backups` folder (last 7 days kept).
 - Files made by Copy as File, and images you drag out of the shelf, are kept in the `Exports` folder
   for a day, then deleted.
@@ -207,6 +284,6 @@ hides menu bar icons that don't fit, and Shelf's may be one of them.
 |---|---|
 | Return closes the shelf but nothing is pasted | Shelf needs Accessibility permission: System Settings → Privacy & Security → Accessibility → turn Shelf on. The item is still on the clipboard, so ⌘V works by hand. |
 | macOS keeps asking for Accessibility although Shelf is on | The entry belongs to an older copy. Select Shelf in that list, click **−**, then paste once and allow it again. |
-| ⇧⌘V does nothing | Another app owns the shortcut (often Paste). Quit it, then quit and reopen Shelf. To use a different shortcut, see "Changing the shortcut" in INSTALL.md. |
-| A copy is missing | Capture may be paused (menu bar), or the app marked the copy as temporary, which Shelf respects. |
-| Shelf isn't running after a restart | Turn on **Launch at Login** in the Shelf menu (⋯ in the shelf, or the menu bar icon). |
+| ⇧⌘V does nothing | Another app owns the shortcut (often Paste). Pick a different one in **Settings** → **Shortcuts** (open it from the menu bar icon), or quit the other app. |
+| A copy is missing | Capture may be paused (menu bar), the app may be ignored (Settings), or the app marked the copy as temporary, which Shelf respects. A key or password is deleted after a few minutes unless pinned. |
+| Shelf isn't running after a restart | Turn on **Launch at login** in Settings. |

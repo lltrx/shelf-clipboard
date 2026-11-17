@@ -18,16 +18,37 @@ All notable changes to Shelf are documented here. The format is based on
   and quality, and the result's real size next to the original's. Return again pastes: the original if
   nothing changed (so Return, Return is a normal paste), otherwise the new file. ⇧Return pastes the
   original straight away; ⌘C copies, ⌘S saves. Tab moves between Name, Format, Size and Quality, and
-  the arrow keys change the one Tab is on. Turn it off with **Ask Before Pasting Images and Files** in
-  the Shelf menu.
+  the arrow keys change the one Tab is on. Turn it off with **Ask before pasting images and files** in
+  Settings.
+- **Blur & Crop (⌘E in that box):** drag over part of an image to hide it (it becomes a coarse mosaic of
+  its own colors, which can't be undone like a light blur) or to crop it. B and C switch tools, ⌘Z
+  undoes, ⌫ clears, Return is Done. The preview is made the same way as the file. The card itself stays
+  as it was.
+- **Settings window (⌘, in the shelf, or Settings… in the Shelf menu):** record new shortcuts for
+  opening the shelf and pasting the previous copy (applied at once; Shelf says if another app has
+  them), how long to keep history (1 week to forever), when to delete passwords and keys, the paste
+  style and the apps set differently, Ask Before Pasting, Add Screenshots, ignored apps, Launch at Login,
+  and whether auto-paste is allowed.
+- **Passwords and keys are spotted and deleted:** text that looks like an API key (OpenAI, Anthropic,
+  GitHub, AWS, Stripe, Slack, Google), a private key, a JWT, a `password=…` line, a link with a password
+  in it or a card number gets a 🔑 card that shows only its last four characters and is deleted after 5
+  minutes unless you pin it. **Forget Last 5 Minutes** in the Shelf menu deletes what you just copied.
+- **Undo delete (⌘Z):** brings back the cards you just deleted, up to the last 20 deletes.
+- **Act on several cards:** mark them with ⌘S, ⇧-click or ⇧← ⇧→, then ⌘P pins, ⌘⌫ deletes and ⌘J
+  joins them into one card, besides Return (paste stack) and ⌥Return (all at once).
+- **Search by app and date:** `from:slack`, `@today`, `@yesterday`, `@week`, `@month`, combined with
+  words as you like.
+- **Snippets:** pinned text can hold `{{date}}`, `{{time}}`, `{{datetime}}`, `{{isodate}}`,
+  `{{clipboard}}` and `{{uuid}}`, filled in when it's pasted.
+- **Paste the previous copy (⌥⇧⌘V)** anywhere, without opening the shelf; press it again to swap back.
 - **Copy as File (⌘R, or right-click):** the same box for any card. Text becomes a Plain Text (any
   extension you type, such as `deploy.sh`), Markdown, RTF, Word or HTML file. Renaming a JPEG or HEIC
   without resizing copies it unchanged.
 - **Paste style per app:** the bottom right of the shelf says what Return pastes in the app you're
   pasting into (for example "Excel: Plain Text"). Click it to choose formatted or plain text for that
   app, or the default for every other app; Shelf remembers it.
-- **Paste Style** in the Shelf menu replaces Paste as Plain Text by Default: choose whether Return pastes
-  **With Formatting** or **Plain Text** by default, and see the apps set differently.
+- **Return pastes** (in Settings) replaces Paste as Plain Text by Default: choose whether Return pastes
+  **With formatting** or **Plain text** by default, and see the apps set differently.
 - **Filter by kind:** ↑ ↓, or the icons next to the search field, show only text, links, images or files.
 - **Drag cards out** of the shelf into other apps. Images arrive as a PNG file with a readable name.
 - A bar at the bottom of the shelf shows what the keys do for the selected card. **Hold ⌘** to see
@@ -36,7 +57,7 @@ All notable changes to Shelf are documented here. The format is based on
 - **Screenshots go straight into the shelf:** screenshots macOS saves as files (⇧⌘3, ⇧⌘4, ⇧⌘5, on
   the Desktop unless changed) appear in History as images, ready to paste, rename or convert, and
   their text is searchable. Only files macOS marks as screenshots count. Turn it off with **Add
-  Screenshots** in the Shelf menu. macOS asks once for access to the folder they're saved in.
+  screenshots** in Settings. macOS asks once for access to the folder they're saved in.
 - **File cards show the file itself:** a screenshot or photo, the first page of a PDF, the start of a
   text file (Quick Look thumbnails). **Space** on a file opens the full Quick Look preview, where PDFs
   and text scroll and videos play.
@@ -51,6 +72,9 @@ All notable changes to Shelf are documented here. The format is based on
   last cards keep their margin when you move to them.
 
 ### Changed
+- **⌘,** in the shelf opens Settings; the **⋯** button still opens the Shelf menu. Add Screenshots,
+  Ask Before Pasting, Paste Style, Ignored Apps and Launch at Login moved from the menu into Settings.
+- Changing the shortcut no longer needs Terminal or a restart.
 - Clearer empty states (no matches, empty pinboard, empty filter), each saying what to do next.
 - The shelf is slightly taller to fit the new bottom bar.
 
