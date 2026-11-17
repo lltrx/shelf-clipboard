@@ -176,6 +176,50 @@ enum ExportAction { case paste, copy, save }
 /// The paste box's controls, in Tab order.
 enum ExportField: Equatable { case name, format, size, quality }
 
+/// The image editor's tools: Blur pixelates the area dragged over, Crop keeps only it.
+enum EditTool: Equatable { case blur, crop }
+
+/// An area of an image, as fractions of its width and height from the top left (0…1), so it holds
+/// at any size.
+struct EditRect: Equatable {
+    var x: Double
+    var y: Double
+    var w: Double
+    var h: Double
+
+    /// The same area kept inside the image, or nil if nothing of it is.
+    var clamped: EditRect? {
+        let left = max(0, x), top = max(0, y)
+        let right = min(1, x + w), bottom = min(1, y + h)
+        guard right > left, bottom > top else { return nil }
+        return EditRect(x: left, y: top, w: right - left, h: bottom - top)
+    }
+}
+
+extension String {
+    /// "Cropped" for "cropped".
+    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
+}
+
+/// What the image editor did: areas to pixelate, then an area to keep.
+struct ImageEdits: Equatable {
+    var blurs: [EditRect] = []
+    var crop: EditRect?
+
+    var isEmpty: Bool { blurs.isEmpty && crop == nil }
+
+    /// Smaller than this (a click, or a slip of the mouse) isn't an area.
+    static let smallest = 0.01
+
+    /// "2 areas hidden, cropped"
+    var summary: String {
+        var parts: [String] = []
+        if !blurs.isEmpty { parts.append(blurs.count == 1 ? "1 area hidden" : "\(blurs.count) areas hidden") }
+        if crop != nil { parts.append("cropped") }
+        return parts.joined(separator: ", ")
+    }
+}
+
 /// The Copy as File form: what is being made, and the choices so far.
 struct ExportDraft: Equatable {
     enum Source: Equatable { case image, text, files }
@@ -194,6 +238,16 @@ struct ExportDraft: Equatable {
     var error: String?
     var startName: String?        // what the box opened with, to tell whether anything changed
     var startFormat: ExportFormat?
+    var edits = ImageEdits()      // blurred and cropped areas (a single image only)
+    var editor: Editor?           // the blur and crop editor, while it's open
+
+    /// The editor's state: the tool, what to put back on Esc, and the steps Undo goes through.
+    struct Editor: Equatable {
+        var tool: EditTool = .blur
+        var before: ImageEdits
+        var history: [ImageEdits] = []
+        var canUndo: Bool { !history.isEmpty }
+    }
 
     static let qualities: [Double] = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
     static let scales: [Double] = [1, 0.75, 0.5, 0.25]
@@ -208,7 +262,7 @@ struct ExportDraft: Equatable {
 
     /// Nothing changed since the box opened.
     var isUnchanged: Bool {
-        name == (startName ?? name) && format == (startFormat ?? format) && scale == 1
+        name == (startName ?? name) && format == (startFormat ?? format) && scale == 1 && edits.isEmpty
     }
 
     /// Return pastes the card as it is: an image or file nobody renamed, resized or converted.
@@ -217,6 +271,44 @@ struct ExportDraft: Equatable {
 
     /// Height of the paste box in points, its arrow included: Size takes a row when there are images.
     var popoverHeight: Double { hasImages ? 193 : 156 }
+
+    // MARK: Blur and crop
+
+    mutating func beginEditing() {
+        guard canEdit, editor == nil else { return }
+        editor = Editor(before: edits)
+    }
+
+    /// An area dragged out with the current tool: Blur adds one, Crop replaces the crop.
+    mutating func addEdit(_ rect: EditRect) {
+        guard var e = editor, let area = rect.clamped,
+              area.w >= ImageEdits.smallest, area.h >= ImageEdits.smallest else { return }
+        e.history.append(edits)
+        switch e.tool {
+        case .blur: edits.blurs.append(area)
+        case .crop: edits.crop = area
+        }
+        editor = e
+    }
+
+    mutating func undoEdit() {
+        guard let previous = editor?.history.popLast() else { return }
+        edits = previous
+    }
+
+    /// Clear: no blurs and no crop (Undo brings them back).
+    mutating func clearEdits() {
+        guard !edits.isEmpty else { return }
+        editor?.history.append(edits)
+        edits = ImageEdits()
+    }
+
+    /// Done keeps the edits; Esc puts back what there was before the editor opened.
+    mutating func endEditing(keep: Bool) {
+        guard let e = editor else { return }
+        if !keep { edits = e.before }
+        editor = nil
+    }
 
     // MARK: Keyboard
 
@@ -261,9 +353,15 @@ struct ExportDraft: Equatable {
 
     var fileNames: [String] {
         ExportNaming.names(typed: name, originals: originals,
-                           extensions: convertible.map { $0 ? format.fileExtension : nil },
+                           extensions: convertible.map { $0 ? outputFormat.fileExtension : nil },
                            keepTypedExtension: format == .txt)
     }
+
+    /// The format files are written in: an edited image whose format is kept becomes a PNG.
+    var outputFormat: ExportFormat { format == .original && !edits.isEmpty ? .png : format }
+
+    /// A single image (a card, or one image file) can be blurred and cropped.
+    var canEdit: Bool { source != .text && originals.count == 1 && convertible.first == true }
 
     /// Quality and size apply: an image is being re-encoded.
     var showsImageOptions: Bool { format.isImage && convertible.contains(true) }

@@ -13,7 +13,11 @@ struct ExportView: View {
 
     var body: some View {
         if let draft = model.exportDraft {
-            box(draft)
+            if draft.editor != nil {
+                ImageEditorView(model: model, draft: draft, source: singleSource(draft))
+            } else {
+                box(draft)
+            }
         }
     }
 
@@ -69,15 +73,31 @@ struct ExportView: View {
                 .animation(Motion.fade, value: draft.format)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(headline(draft))
-                    .font(.system(size: 11.5))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                if let error = draft.error {
-                    Text(error).font(.system(size: 11)).foregroundStyle(.red).lineLimit(1).truncationMode(.tail)
-                } else {
-                    Text(detail(draft)).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(headline(draft))
+                        .font(.system(size: 11.5))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if let error = draft.error {
+                        Text(error).font(.system(size: 11)).foregroundStyle(.red).lineLimit(1).truncationMode(.tail)
+                    } else {
+                        Text(detail(draft)).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                if draft.canEdit {
+                    Button { model.actions?.openImageEditor() } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "crop")
+                            Text("Blur & Crop")
+                            Text("⌘E").foregroundStyle(.secondary)
+                        }
+                        .font(.system(size: 11.5))
+                    }
+                    .controlSize(.small)
+                    .help("Hide or crop part of the image")
+                    .disabled(draft.busy)
                 }
             }
             .padding(.leading, 54)
@@ -188,11 +208,12 @@ struct ExportView: View {
     private func detail(_ draft: ExportDraft) -> String {
         if draft.source == .text { return "\((draft.item.text?.count ?? 0).formatted()) characters" }
         if draft.pastesOriginal { return original }
-        return original.isEmpty ? "" : "was \(original)"
+        let was = original.isEmpty ? nil : "was \(original)"
+        return [draft.edits.isEmpty ? nil : draft.edits.summary.capitalizedFirst, was].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func estimateKey(_ draft: ExportDraft) -> String {
-        "\(draft.id) \(draft.format.rawValue) \(draft.quality) \(draft.scale)"
+        "\(draft.id) \(draft.format.rawValue) \(draft.quality) \(draft.scale) \(String(describing: draft.edits))"
     }
 
     /// The single image or file this card holds, if there is one to measure.
@@ -207,12 +228,12 @@ struct ExportView: View {
     /// The new file, measured for real, a moment after the choices stop changing.
     @MainActor private func updateEstimate(_ draft: ExportDraft) async {
         estimate = ""
-        guard !draft.pastesOriginal, draft.showsImageOptions, let source = singleSource(draft) else { return }
+        guard !draft.pastesOriginal, draft.hasImages, draft.outputFormat.isImage, let source = singleSource(draft) else { return }
         try? await Task.sleep(nanoseconds: 200_000_000)
         if Task.isCancelled { return }
-        let format = draft.format, quality = draft.quality, scale = draft.scale
+        let format = draft.outputFormat, quality = draft.quality, scale = draft.scale, edits = draft.edits
         let text = await Task.detached(priority: .userInitiated) {
-            FileExport.describe(source, format: format, quality: quality, scale: scale, convert: true)
+            FileExport.describe(source, format: format, quality: quality, scale: scale, convert: true, edits: edits)
         }.value
         if !Task.isCancelled { estimate = text }
     }

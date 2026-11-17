@@ -31,8 +31,11 @@ final class ShelfPanel: NSPanel {
     }
 
     /// SwiftUI content that draws its own shape and background (the paste box with its arrow).
+    /// Its size is set from outside (the paste box grows for the image editor), not by the content.
     func hostPlain<V: View>(_ view: V) {
-        contentView = NSHostingView(rootView: view)
+        let hosting = NSHostingView(rootView: view)
+        hosting.sizingOptions = []
+        contentView = hosting
     }
 
     /// Frosted, rounded content with a SwiftUI view inside.
@@ -279,6 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     /// Keys in the paste box. Everything else goes to the name field and the menus.
     private func handleExportKey(_ e: NSEvent) -> Bool {
         let cmd = e.modifierFlags.contains(.command)
+        if model.exportDraft?.editor != nil { return handleImageEditorKey(e) }
         switch e.keyCode {
         case 53: cancelExport(); return true                                // esc
         case 36, 76:                                                        // return
@@ -291,6 +295,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             return true
         case 8 where cmd: finishExport(.copy); return true                  // ⌘C
         case 1 where cmd: finishExport(.save); return true                  // ⌘S
+        case 14 where cmd: openImageEditor(); return true                   // ⌘E: blur and crop
         case 48:                                                            // tab, ⇧tab: next control
             if let draft = model.exportDraft {
                 model.exportFocus = draft.field(after: model.exportFocus, backward: e.modifierFlags.contains(.shift))
@@ -313,6 +318,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             return true
         default: return false
         }
+    }
+
+    /// Keys in the blur and crop editor. It has no text field, so it takes every key.
+    private func handleImageEditorKey(_ e: NSEvent) -> Bool {
+        let cmd = e.modifierFlags.contains(.command)
+        switch e.keyCode {
+        case 53: closeImageEditor(keep: false)                              // esc: as it was
+        case 36, 76: if !e.isARepeat { closeImageEditor(keep: true) }       // return: done
+        case 6 where cmd: model.exportDraft?.undoEdit()                     // ⌘Z
+        case 51, 117: model.exportDraft?.clearEdits()                       // ⌫: clear
+        case 11 where !cmd: model.exportDraft?.editor?.tool = .blur         // B
+        case 8 where !cmd: model.exportDraft?.editor?.tool = .crop          // C
+        case 14 where cmd: closeImageEditor(keep: true)                     // ⌘E again
+        default: break
+        }
+        return true
     }
 
     private func toggle() {
@@ -876,14 +897,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
     /// The paste box sits just above the shelf, its arrow pointing at the selected card.
     private func showExportForm() {
-        guard let draft = model.exportDraft, let vf = panel.screen?.visibleFrame else { return }
-        let width: CGFloat = 400
-        let cardX = panel.frame.minX + (model.selectedCardMidX ?? panel.frame.width / 2)
-        let x = min(max(cardX - width / 2, vf.minX + 8), vf.maxX - width - 8)
-        model.popoverArrowX = cardX - x
-        popover.setFrame(NSRect(x: x, y: panel.frame.maxY - 4, width: width, height: CGFloat(draft.popoverHeight)), display: true)
+        layoutExportForm()
         popover.allowsKey = true
         fadeIn(popover)
+        popover.makeKey()
+    }
+
+    /// Sizes and places the paste box: 400 points wide, or as big as fits (up to 640 × 480) while
+    /// the image editor is open.
+    private func layoutExportForm() {
+        guard let draft = model.exportDraft, let vf = panel.screen?.visibleFrame else { return }
+        let bottom = panel.frame.maxY - 4
+        let size = draft.editor == nil
+            ? CGSize(width: 400, height: draft.popoverHeight)
+            : CGSize(width: min(640, vf.width - 16), height: max(260, min(480, vf.maxY - bottom - 8)))
+        let cardX = panel.frame.minX + (model.selectedCardMidX ?? panel.frame.width / 2)
+        let x = min(max(cardX - size.width / 2, vf.minX + 8), vf.maxX - size.width - 8)
+        model.popoverArrowX = cardX - x
+        model.popoverSize = size
+        popover.setFrame(NSRect(x: x, y: bottom, width: size.width, height: size.height), display: true)
+    }
+
+    /// ⌘E or Blur & Crop in the paste box: the box grows to show the image.
+    func openImageEditor() {
+        guard var draft = model.exportDraft, draft.canEdit, !draft.busy, draft.editor == nil else { return }
+        draft.beginEditing()
+        model.exportDraft = draft
+        layoutExportForm()
+    }
+
+    /// Done (keep) or Esc: back to the box, which then pastes, copies or saves the edited image.
+    func closeImageEditor(keep: Bool) {
+        guard model.exportDraft?.editor != nil else { return }
+        model.exportDraft?.endEditing(keep: keep)
+        layoutExportForm()
         popover.makeKey()
     }
 
@@ -899,7 +946,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     /// Makes the files (off the main thread: images may need converting, files copying), then
     /// pastes, copies or saves them.
     func finishExport(_ action: ExportAction) {
-        guard var draft = model.exportDraft, !draft.busy else { return }
+        guard var draft = model.exportDraft, !draft.busy, draft.editor == nil else { return }
         if draft.pastesOriginal && action != .save {   // nothing changed: the card itself, as before
             action == .paste ? paste(draft.item, plain: false) : copy(draft.item)
             return
@@ -920,8 +967,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         case .files:
             content = .files(draft.item.filePaths.map { URL(fileURLWithPath: $0) })
         }
-        let job = FileExport.Job(content: content, names: draft.fileNames, format: draft.format,
-                                 quality: draft.quality, scale: draft.scale, convert: draft.convertible)
+        let job = FileExport.Job(content: content, names: draft.fileNames, format: draft.outputFormat,
+                                 quality: draft.quality, scale: draft.scale, convert: draft.convertible,
+                                 edits: draft.edits)
         rememberExportChoices(draft)
         draft.busy = true
         draft.error = nil

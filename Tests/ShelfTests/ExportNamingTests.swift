@@ -178,6 +178,68 @@ final class ExportNamingTests: XCTestCase {
         XCTAssertEqual(d.quality, 0.7, accuracy: 0.001)
     }
 
+    func testEditsCountAsAChange() {
+        var d = draft(["shot.png"], [true], .png, formats: [.png, .jpeg])
+        d.startName = ""
+        d.startFormat = .png
+        XCTAssertTrue(d.pastesOriginal)
+        XCTAssertTrue(d.canEdit)
+        d.edits.blurs.append(EditRect(x: 0.1, y: 0.1, w: 0.2, h: 0.1))
+        XCTAssertFalse(d.pastesOriginal)
+        XCTAssertEqual(d.edits.summary, "1 area hidden")
+        d.edits.crop = EditRect(x: 0, y: 0, w: 0.5, h: 0.5)
+        XCTAssertEqual(d.edits.summary, "1 area hidden, cropped")
+    }
+
+    func testEditedImageKeepingItsFormatIsWrittenAsPNG() {
+        var d = draft(["photo.webp"], [true], .original, formats: [.original, .png])
+        XCTAssertEqual(d.outputFormat, .original)
+        XCTAssertEqual(d.fileNames, ["photo.webp"])
+        d.edits.crop = EditRect(x: 0.2, y: 0.2, w: 0.5, h: 0.5)
+        XCTAssertEqual(d.outputFormat, .png)
+        XCTAssertEqual(d.fileNames, ["photo.png"])
+    }
+
+    func testOnlyASingleImageCanBeEdited() {
+        XCTAssertFalse(draft(["a.png", "b.png"], [true, true], .png).canEdit)
+        XCTAssertFalse(draft(["a.pdf"], [false], .original).canEdit)
+    }
+
+    func testEditRectStaysInsideTheImage() {
+        XCTAssertEqual(EditRect(x: -0.25, y: 0.5, w: 0.5, h: 0.75).clamped, EditRect(x: 0, y: 0.5, w: 0.25, h: 0.5))
+        XCTAssertNil(EditRect(x: 1.2, y: 0, w: 0.3, h: 0.3).clamped)
+    }
+
+    func testEditorAddsUndoesAndCancels() {
+        var d = draft(["shot.png"], [true], .png, formats: [.png, .jpeg])
+        d.addEdit(EditRect(x: 0, y: 0, w: 0.5, h: 0.5))             // the editor isn't open
+        XCTAssertTrue(d.edits.isEmpty)
+
+        d.beginEditing()
+        d.addEdit(EditRect(x: 0.1, y: 0.1, w: 0.2, h: 0.1))
+        d.addEdit(EditRect(x: 0.5, y: 0.5, w: 0.004, h: 0.3))       // a click: ignored
+        d.addEdit(EditRect(x: 0.6, y: 0.6, w: 0.2, h: 0.2))
+        XCTAssertEqual(d.edits.blurs.count, 2)
+        d.editor?.tool = .crop
+        d.addEdit(EditRect(x: 0, y: 0, w: 0.9, h: 0.9))
+        d.addEdit(EditRect(x: 0.1, y: 0.1, w: 0.8, h: 0.8))          // a new crop replaces the old one
+        XCTAssertEqual(d.edits.crop, EditRect(x: 0.1, y: 0.1, w: 0.8, h: 0.8))
+        d.undoEdit()
+        XCTAssertEqual(d.edits.crop, EditRect(x: 0, y: 0, w: 0.9, h: 0.9))
+        d.clearEdits()
+        XCTAssertTrue(d.edits.isEmpty)
+        d.undoEdit()
+        XCTAssertEqual(d.edits.blurs.count, 2)
+        d.endEditing(keep: true)
+        XCTAssertNil(d.editor)
+        XCTAssertEqual(d.edits.blurs.count, 2)
+
+        d.beginEditing()                                            // again, then Esc: as it was
+        d.addEdit(EditRect(x: 0.2, y: 0.2, w: 0.3, h: 0.3))
+        d.endEditing(keep: false)
+        XCTAssertEqual(d.edits.blurs.count, 2)
+    }
+
     func testFormatExtensions() {
         XCTAssertEqual(ExportFormat.jpeg.fileExtension, "jpg")
         XCTAssertNil(ExportFormat.original.fileExtension)

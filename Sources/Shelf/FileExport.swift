@@ -2,7 +2,7 @@ import AppKit
 import ImageIO
 import UniformTypeIdentifiers
 
-/// Copy as File: makes real files from a card, with the name and format chosen in the form.
+/// The paste box's files: made from a card, with the name, format, size and edits chosen in the box.
 /// They are written to Application Support/Shelf/Exports (mode 700) and deleted after a day;
 /// pasting or dropping them into another app (Finder, Mail, Slack…) makes that app's own copy.
 enum FileExport {
@@ -21,6 +21,7 @@ enum FileExport {
         var quality: Double
         var scale: Double
         var convert: [Bool]   // for files: re-encode this one (an image) in `format`
+        var edits = ImageEdits()
     }
 
     /// Image formats this Mac can write. HEIC needs a hardware encoder that some Intel Macs lack.
@@ -51,7 +52,7 @@ enum FileExport {
             return [url]
         case .image(let source):
             let url = dir.appendingPathComponent(job.names[0])
-            try convertImage(at: source, to: job.format, quality: job.quality, scale: job.scale).write(to: url)
+            try convertImage(at: source, to: job.format, quality: job.quality, scale: job.scale, edits: job.edits).write(to: url)
             return [url]
         case .files(let sources):
             var out: [URL] = []
@@ -61,9 +62,9 @@ enum FileExport {
                 }
                 let url = dir.appendingPathComponent(job.names[i])
                 // Same format at full size is just a rename: copy, don't re-encode (and lose quality).
-                let sameFormat = ExportFormat.of(extension: source.pathExtension) == job.format && job.scale == 1
+                let sameFormat = ExportFormat.of(extension: source.pathExtension) == job.format && job.scale == 1 && job.edits.isEmpty
                 if job.format != .original, i < job.convert.count, job.convert[i], !sameFormat {
-                    try convertImage(at: source, to: job.format, quality: job.quality, scale: job.scale).write(to: url)
+                    try convertImage(at: source, to: job.format, quality: job.quality, scale: job.scale, edits: job.edits).write(to: url)
                 } else {
                     try fm.copyItem(at: source, to: url)   // a clone on APFS: instant, no extra space
                 }
@@ -75,8 +76,9 @@ enum FileExport {
 
     /// The image file `url`, re-encoded. Orientation is applied; other metadata, such as where a
     /// photo was taken, is left out. The resolution (dpi) is adjusted so the image keeps its
-    /// size on the page when it's scaled down.
-    static func convertImage(at url: URL, to format: ExportFormat, quality: Double, scale: Double) throws -> Data {
+    /// size on the page when it's scaled down. Blurred areas are hidden and the crop applied first.
+    static func convertImage(at url: URL, to format: ExportFormat, quality: Double, scale: Double,
+                             edits: ImageEdits = ImageEdits()) throws -> Data {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? Int,
@@ -94,6 +96,10 @@ enum FileExport {
             throw failure("Shelf can't read “\(url.lastPathComponent)” as an image.")
         }
         let factor = Double(max(image.width, image.height)) / Double(longest)
+        if !edits.isEmpty {
+            guard let edited = apply(edits, to: image) else { throw failure("Couldn't blur or crop the image.") }
+            image = edited
+        }
         let dpiX = (properties[kCGImagePropertyDPIWidth] as? Double).map { $0 * factor }
         let dpiY = (properties[kCGImagePropertyDPIHeight] as? Double).map { $0 * factor }
 
@@ -114,6 +120,90 @@ enum FileExport {
         CGImageDestinationAddImage(destination, image, out as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw failure("Couldn't save the \(format.title) image.") }
         return data as Data
+    }
+
+    /// The image with each blurred area turned into big blocks of its own average colors (a
+    /// mosaic: the original pixels can't be recovered from it, unlike a light blur), then cropped.
+    /// The areas are fractions of the image, so the editor's small preview and the full-size file match.
+    static func apply(_ edits: ImageEdits, to image: CGImage) -> CGImage? {
+        var out = image
+        let width = image.width, height = image.height
+        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
+        if !edits.blurs.isEmpty {
+            let rgb = image.colorSpace.flatMap { $0.model == .rgb ? $0 : nil }
+            guard let space = rgb ?? CGColorSpace(name: CGColorSpace.sRGB),
+                  let context = bitmap(width, height, space), let data = context.data else { return nil }
+            context.draw(image, in: bounds)
+            let pixels = data.assumingMemoryBound(to: UInt8.self)   // RGBA rows, the top one first
+            let rowBytes = context.bytesPerRow
+            let longest = Double(max(width, height))
+            for blur in edits.blurs {
+                guard let area = blur.clamped else { continue }
+                let x0 = Int((area.x * Double(width)).rounded(.down)), x1 = min(width, Int(((area.x + area.w) * Double(width)).rounded(.up)))
+                let y0 = Int((area.y * Double(height)).rounded(.down)), y1 = min(height, Int(((area.y + area.h) * Double(height)).rounded(.up)))
+                guard x1 > x0, y1 > y0 else { continue }
+                // Blocks a third of the area's short side (a line of text becomes one or two rows of
+                // them), but never smaller than 1% of the image, nor bigger than 4%.
+                let short = Double(min(x1 - x0, y1 - y0))
+                let block = max(1, Int(min(max(short / 3, longest / 100, 2), longest / 25).rounded()))
+                for by in stride(from: y0, to: y1, by: block) {
+                    for bx in stride(from: x0, to: x1, by: block) {
+                        let ex = min(bx + block, x1), ey = min(by + block, y1)
+                        var sum = (0, 0, 0, 0)
+                        for y in by..<ey {
+                            var i = y * rowBytes + bx * 4
+                            for _ in bx..<ex {
+                                sum.0 += Int(pixels[i]); sum.1 += Int(pixels[i + 1])
+                                sum.2 += Int(pixels[i + 2]); sum.3 += Int(pixels[i + 3])
+                                i += 4
+                            }
+                        }
+                        let count = (ex - bx) * (ey - by)
+                        let average = [sum.0, sum.1, sum.2, sum.3].map { UInt8(($0 + count / 2) / count) }
+                        for y in by..<ey {
+                            var i = y * rowBytes + bx * 4
+                            for _ in bx..<ex {
+                                pixels[i] = average[0]; pixels[i + 1] = average[1]
+                                pixels[i + 2] = average[2]; pixels[i + 3] = average[3]
+                                i += 4
+                            }
+                        }
+                    }
+                }
+            }
+            guard let made = context.makeImage() else { return nil }
+            out = made
+        }
+        if let crop = edits.crop?.clamped {
+            // Like the blurs, measured from the top left (as CGImage cropping is).
+            let rect = CGRect(x: crop.x * Double(width), y: crop.y * Double(height),
+                              width: crop.w * Double(width), height: crop.h * Double(height)).integral.intersection(bounds)
+            guard rect.width >= 1, rect.height >= 1, let cropped = out.cropping(to: rect) else { return nil }
+            out = cropped
+        }
+        return out
+    }
+
+    /// An 8-bit RGBA canvas, in the image's color space if it can have one (else sRGB).
+    private static func bitmap(_ width: Int, _ height: Int, _ space: CGColorSpace) -> CGContext? {
+        func make(_ space: CGColorSpace) -> CGContext? {
+            CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        }
+        return make(space) ?? CGColorSpace(name: CGColorSpace.sRGB).flatMap(make)
+    }
+
+    /// The image file at `url`, its orientation applied, at most `maxPixels` on its longest side:
+    /// what the editor shows.
+    static func displayImage(_ url: URL, maxPixels: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 
     /// One PDF page the size of the image (at its resolution).
@@ -150,13 +240,14 @@ enum FileExport {
 
     /// "1440 × 900 · 312 KB" for the form: what the file will be, measured by actually making it.
     /// Runs off the main thread.
-    static func describe(_ url: URL, format: ExportFormat, quality: Double, scale: Double, convert: Bool) -> String {
+    static func describe(_ url: URL, format: ExportFormat, quality: Double, scale: Double, convert: Bool,
+                         edits: ImageEdits = ImageEdits()) -> String {
         if !convert || format == .original {
             let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.int64Value
             let size = isImage(url.path) ? pixelSize(url).map { "\($0.width) × \($0.height)" } : nil
             return [size, bytes.map(byteCount)].compactMap { $0 }.joined(separator: " · ")
         }
-        guard let data = try? convertImage(at: url, to: format, quality: quality, scale: scale) else { return "" }
+        guard let data = try? convertImage(at: url, to: format, quality: quality, scale: scale, edits: edits) else { return "" }
         let size = format == .pdf ? nil : pixelSize(data).map { "\($0.width) × \($0.height)" }
         return [size, byteCount(Int64(data.count))].compactMap { $0 }.joined(separator: " · ")
     }

@@ -16,6 +16,8 @@ protocol ShelfActions: AnyObject {
     func startExport(_ item: ClipItem)
     func finishExport(_ action: ExportAction)
     func cancelExport()
+    func openImageEditor()
+    func closeImageEditor(keep: Bool)
     func dragItem(_ item: ClipItem) -> NSItemProvider?
     func commitName()
     func deleteBoard(_ board: Board)
@@ -51,6 +53,7 @@ final class ShelfModel: ObservableObject {
     @Published var appStyles: [String: Bool] = [:]   // bundle id → Return pastes plain text (true) or formatted there
     @Published var askBeforePasting = true      // Return on an image or file opens the paste box first
     @Published var popoverArrowX: CGFloat = 200 // where the paste box's arrow points, in the box
+    @Published var popoverSize = CGSize(width: 400, height: 193)   // the box's size (bigger while editing an image)
     @Published var exportFocus: ExportField = .name   // the paste box control Tab is on
     var selectedCardMidX: CGFloat?              // the selected card's center in the shelf, for the paste box
 
