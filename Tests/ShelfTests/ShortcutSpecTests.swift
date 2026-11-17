@@ -28,4 +28,17 @@ final class ShortcutSpecTests: XCTestCase {
         XCTAssertNil(ShortcutSpec(keyCode: 40, command: false, option: false, shift: true, control: false))
         XCTAssertNil(ShortcutSpec(keyCode: 122, command: true, option: false, shift: false, control: false))   // F1
     }
+
+    func testGlobalShortcutsDefaultsAndTurningOff() {
+        XCTAssertEqual(GlobalShortcut.open.spec(stored: nil)?.display, "⇧⌘V")
+        XCTAssertEqual(GlobalShortcut.previous.spec(stored: nil)?.display, "⌥⇧⌘V")
+        XCTAssertEqual(GlobalShortcut.grabText.spec(stored: nil)?.display, "⇧⌘2")
+        XCTAssertNil(GlobalShortcut.grabText.spec(stored: ""))                        // turned off
+        XCTAssertEqual(GlobalShortcut.open.spec(stored: "")?.display, "⇧⌘V")          // can't be turned off
+        XCTAssertEqual(GlobalShortcut.open.spec(stored: "nonsense")?.display, "⇧⌘V")  // unusable: the default
+        XCTAssertEqual(GlobalShortcut.previous.spec(stored: "ctrl+option+p")?.display, "⌃⌥P")
+        XCTAssertEqual(Set(GlobalShortcut.allCases.map(\.key)).count, GlobalShortcut.allCases.count)
+        let defaults = GlobalShortcut.allCases.compactMap { $0.spec(stored: nil) }
+        XCTAssertEqual(Set(defaults.map(\.spec)).count, defaults.count)              // no two the same
+    }
 }

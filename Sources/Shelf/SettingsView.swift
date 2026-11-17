@@ -14,9 +14,9 @@ enum AppName {
 
 /// What Settings needs from the app.
 protocol SettingsActions: AnyObject {
-    /// Registers the shortcuts saved in Settings and says which ones worked (another app may
-    /// already have one).
-    func applyShortcuts() -> (open: Bool, previous: Bool)
+    /// Registers the shortcuts saved in Settings and returns the ones that didn't work (another app
+    /// already has those keys).
+    func applyShortcuts() -> Set<GlobalShortcut>
     /// While a shortcut is being recorded, the current ones are let go, so pressing them records them.
     func pauseShortcuts()
     /// Something else in Settings changed: pick it up.
@@ -27,7 +27,7 @@ protocol SettingsActions: AnyObject {
 /// window always shows what's in effect, even if a menu changed it meanwhile. It uses no AppKit
 /// windows or events itself: the app's key monitor hands it the keys while a shortcut is recorded.
 final class SettingsModel: ObservableObject {
-    enum Shortcut { case open, previous }
+    typealias Shortcut = GlobalShortcut
 
     weak var actions: SettingsActions?
     @Published private(set) var recording: Shortcut?
@@ -36,8 +36,6 @@ final class SettingsModel: ObservableObject {
     private let defaults = UserDefaults.standard
     private var observer: Any?
 
-    static let defaultOpen = "cmd+shift+v"
-    static let defaultPrevious = "cmd+option+shift+v"
     static let historyChoices = [7, 14, 30, 90, 365, 0]
     static let secretChoices: [Double] = [1, 5, 15, 60, 0]
 
@@ -59,18 +57,10 @@ final class SettingsModel: ObservableObject {
 
     // MARK: Shortcuts
 
-    private func key(_ shortcut: Shortcut) -> String { shortcut == .open ? "hotkey" : "pastePreviousHotkey" }
+    /// The shortcut in effect, or nil when it's turned off.
+    func spec(_ shortcut: Shortcut) -> ShortcutSpec? { shortcut.spec(stored: defaults.string(forKey: shortcut.key)) }
 
-    private func fallback(_ shortcut: Shortcut) -> String { shortcut == .open ? Self.defaultOpen : Self.defaultPrevious }
-
-    /// The shortcut in effect, or nil when Paste Previous is turned off.
-    func spec(_ shortcut: Shortcut) -> ShortcutSpec? {
-        let stored = defaults.string(forKey: key(shortcut)) ?? fallback(shortcut)
-        if shortcut == .previous && stored.isEmpty { return nil }
-        return ShortcutSpec(stored) ?? ShortcutSpec(fallback(shortcut))
-    }
-
-    func isDefault(_ shortcut: Shortcut) -> Bool { spec(shortcut) == ShortcutSpec(fallback(shortcut)) }
+    func isDefault(_ shortcut: Shortcut) -> Bool { spec(shortcut) == ShortcutSpec(shortcut.fallback) }
 
     func startRecording(_ shortcut: Shortcut) {
         stopRecording()
@@ -93,24 +83,22 @@ final class SettingsModel: ObservableObject {
         if keyCode == 53 { stopRecording(); return true }                                    // esc
         if keyCode == 51 || keyCode == 117, !command, !option, !control {                    // ⌫
             stopRecording()
-            if shortcut == .previous { turnOffPrevious() } else { reset(.open) }
+            if shortcut.canTurnOff { turnOff(shortcut) } else { reset(shortcut) }
             return true
         }
         guard let new = ShortcutSpec(keyCode: keyCode, command: command, option: option, shift: shift, control: control) else {
             shortcutMessage = "Use ⌘, ⌥ or ⌃ with a letter, a number or Space."
             return false
         }
-        let other: Shortcut = shortcut == .open ? .previous : .open
-        if spec(other) == new {
-            shortcutMessage = "\(new.display) is already \(other == .open ? "Open Shelf" : "Paste Previous Copy")."
+        if let other = Shortcut.allCases.first(where: { $0 != shortcut && spec($0) == new }) {
+            shortcutMessage = "\(new.display) is already \(other.title)."
             return false
         }
-        let old = defaults.string(forKey: key(shortcut))
-        defaults.set(new.spec, forKey: key(shortcut))
+        let old = defaults.string(forKey: shortcut.key)
+        defaults.set(new.spec, forKey: shortcut.key)
         recording = nil
-        let worked = actions?.applyShortcuts() ?? (open: true, previous: true)
-        if !(shortcut == .open ? worked.open : worked.previous) {
-            defaults.set(old, forKey: key(shortcut))   // put back the one that worked
+        if actions?.applyShortcuts().contains(shortcut) == true {
+            defaults.set(old, forKey: shortcut.key)   // put back the one that worked
             _ = actions?.applyShortcuts()
             shortcutMessage = "Another app already uses \(new.display). Try a different one."
         } else {
@@ -121,15 +109,15 @@ final class SettingsModel: ObservableObject {
 
     func reset(_ shortcut: Shortcut) {
         stopRecording()
-        defaults.removeObject(forKey: key(shortcut))
-        let worked = actions?.applyShortcuts() ?? (open: true, previous: true)
-        let ok = shortcut == .open ? worked.open : worked.previous
-        shortcutMessage = ok ? nil : "Another app already uses \(ShortcutSpec(fallback(shortcut))?.display ?? "it")."
+        defaults.removeObject(forKey: shortcut.key)
+        let failed = actions?.applyShortcuts().contains(shortcut) == true
+        shortcutMessage = failed ? "Another app already uses \(ShortcutSpec(shortcut.fallback)?.display ?? "it")." : nil
     }
 
-    func turnOffPrevious() {
+    func turnOff(_ shortcut: Shortcut) {
+        guard shortcut.canTurnOff else { return }
         stopRecording()
-        defaults.set("", forKey: key(.previous))
+        defaults.set("", forKey: shortcut.key)
         _ = actions?.applyShortcuts()
         shortcutMessage = nil
     }
@@ -226,6 +214,16 @@ final class SettingsModel: ObservableObject {
 
     var canAutoPaste: Bool { AXIsProcessTrusted() }
 
+    var canCaptureScreen: Bool { CGPreflightScreenCaptureAccess() }
+
+    /// Asks macOS (it shows its prompt the first time), then opens the Screen Recording settings.
+    func allowScreenCapture() {
+        if !CGRequestScreenCaptureAccess(),
+           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     func allowAutoPaste() {
         _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
     }
@@ -242,6 +240,16 @@ struct SettingsView: View {
                 shortcutRow("Open Shelf", .open)
                 shortcutRow("Paste previous copy", .previous,
                             note: "Pastes the copy before the last one, without opening the shelf. Press it again to swap back.")
+                shortcutRow("Grab text from screen", .grabText,
+                            note: "Drag over anything on screen; the text in it is copied, ready to paste.")
+                LabeledContent("Screen Recording") {
+                    if settings.canCaptureScreen {
+                        Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    } else {
+                        Button("Allow…") { settings.allowScreenCapture() }
+                    }
+                }
+                .help("Grab Text from Screen needs it to see other apps' windows (System Settings → Privacy & Security → Screen & System Audio Recording)")
                 if let message = settings.shortcutMessage {
                     Text(message).font(.callout).foregroundStyle(.secondary)
                 }
@@ -348,14 +356,14 @@ struct SettingsView: View {
                         .foregroundStyle(recording ? Color.accentColor : Color.primary)
                         .frame(minWidth: 110)
                 }
-                .help("Click, then press the new shortcut. ⌫ \(shortcut == .previous ? "turns it off" : "goes back to ⇧⌘V").")
+                .help("Click, then press the new shortcut. ⌫ \(shortcut.canTurnOff ? "turns it off" : "goes back to the default").")
                 if !settings.isDefault(shortcut) && !recording {
                     Button { settings.reset(shortcut) } label: { Image(systemName: "arrow.counterclockwise") }
                         .buttonStyle(.borderless)
-                        .help("Back to \(ShortcutSpec(shortcut == .open ? SettingsModel.defaultOpen : SettingsModel.defaultPrevious)?.display ?? "the default")")
+                        .help("Back to \(ShortcutSpec(shortcut.fallback)?.display ?? "the default")")
                 }
-                if shortcut == .previous && settings.spec(.previous) != nil && !recording {
-                    removeButton("Turn off") { settings.turnOffPrevious() }
+                if shortcut.canTurnOff && settings.spec(shortcut) != nil && !recording {
+                    removeButton("Turn off") { settings.turnOff(shortcut) }
                 }
             }
         } label: {

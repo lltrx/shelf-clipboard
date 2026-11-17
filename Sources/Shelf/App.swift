@@ -79,8 +79,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     private let panel = ShelfPanel()
     private let preview = ShelfPanel()
     private let popover = ShelfPanel()   // the paste box, just above the selected card
-    private var hotKey: HotKey?          // opens the shelf (⇧⌘V)
-    private var previousHotKey: HotKey?  // pastes the copy before the current one (⌥⇧⌘V)
+    private var hotKeys: [GlobalShortcut: HotKey] = [:]   // open the shelf, paste previous, grab text
+    private let toast = Toast()
+    private var grabbing = false
     private var statusItem: NSStatusItem!
     private var keyMonitor: Any?
     private var flagsMonitor: Any?
@@ -124,14 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         monitor.onCapture = { [unowned self] copied in
             if stackActive { endStack() } // you copied something new; the stack is over
             model.password = nil
-            let capture = cleanLinks ? withoutTracking(copied) : copied
-            let id = store.upsert(capture)
-            if let id, secretMinutes > 0, capture.kind == .text || capture.kind == .link,
-               let text = capture.text, SecretScanner.kind(of: text) != nil {
-                store.setExpiry(id, Date().addingTimeInterval(secretMinutes * 60))
-            }
-            reload()
-            if capture.kind == .image { runOCR() }
+            record(cleanLinks ? withoutTracking(copied) : copied)
         }
         monitor.ignoredApps = Set(ignoredApps)
         monitor.onConcealed = { [unowned self] in
@@ -362,16 +356,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         shelfOpen ? hide() : show()
     }
 
-    /// The global shortcuts, from settings. Called again when Settings changes one.
-    func registerHotKeys() {
-        hotKey = nil            // releasing a HotKey unregisters it, so the same keys can be taken again
-        previousHotKey = nil
-        let open = UserDefaults.standard.string(forKey: "hotkey") ?? "cmd+shift+v"
-        hotKey = HotKey(spec: HotKey.isValid(open) ? open : "cmd+shift+v") { [unowned self] in toggle() }
-        let previous = UserDefaults.standard.string(forKey: "pastePreviousHotkey") ?? "cmd+option+shift+v"
-        if HotKey.isValid(previous) {
-            previousHotKey = HotKey(spec: previous) { [unowned self] in pastePrevious() }
+    /// The global shortcuts, from settings. Called again when Settings changes one. Returns the
+    /// ones another app already has.
+    @discardableResult
+    func registerHotKeys() -> Set<GlobalShortcut> {
+        hotKeys = [:]   // releasing a HotKey unregisters it, so the same keys can be taken again
+        var failed: Set<GlobalShortcut> = []
+        for shortcut in GlobalShortcut.allCases {
+            guard let spec = shortcut.spec(stored: UserDefaults.standard.string(forKey: shortcut.key)) else { continue }  // off
+            let action: () -> Void
+            switch shortcut {
+            case .open: action = { [unowned self] in toggle() }
+            case .previous: action = { [unowned self] in pastePrevious() }
+            case .grabText: action = { [unowned self] in grabText() }
+            }
+            if let hotKey = HotKey(spec: spec.spec, handler: action) {
+                hotKeys[shortcut] = hotKey
+            } else {
+                failed.insert(shortcut)
+            }
         }
+        return failed
     }
 
     /// ⌥⇧⌘V anywhere: pastes the copy before the current one, without opening the shelf. Pressing
@@ -1240,6 +1245,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         reload()
     }
 
+    /// Adds a copy to History (secrets get their expiry) and refreshes the shelf.
+    private func record(_ capture: Capture) {
+        let id = store.upsert(capture)
+        if let id, secretMinutes > 0, capture.kind == .text || capture.kind == .link,
+           let text = capture.text, SecretScanner.kind(of: text) != nil {
+            store.setExpiry(id, Date().addingTimeInterval(secretMinutes * 60))
+        }
+        reload()
+        if capture.kind == .image { runOCR() }
+    }
+
+    // MARK: - Grab text from screen
+
+    /// ⇧⌘2 anywhere (or the Shelf menu): drag over part of the screen, like a screenshot. The text
+    /// in it is recognized on this Mac, put on the clipboard and added to History. Space while
+    /// choosing picks a whole window; Esc cancels.
+    func grabText() {
+        guard !grabbing else { return }
+        guard CGPreflightScreenCaptureAccess() else {
+            // macOS shows its prompt the first time; after that, the setting has to be turned on.
+            if !CGRequestScreenCaptureAccess() {
+                toast.show("Allow Shelf in Screen Recording, then try again", symbol: "lock.shield")
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            return
+        }
+        grabbing = true
+        if shelfOpen { hide(animated: false) }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("shelf-grab-\(UUID().uuidString).png")
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let text = OCR.grabFromScreen(file)
+            DispatchQueue.main.async { self?.grabFinished(text) }
+        }
+    }
+
+
+    private func grabFinished(_ recognized: String?) {
+        grabbing = false
+        guard let recognized else { return }
+        let text = recognized.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            NSSound.beep()
+            toast.show("No text found there", symbol: "text.viewfinder")
+            return
+        }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+        monitor.markOwnChange()
+        record(Capture(kind: Monitor.isLink(text) ? .link : .text, text: text, hash: Monitor.digest("text", Data(text.utf8)),
+                       sourceBundle: Bundle.main.bundleIdentifier, sourceName: "Text from Screen"))
+        let words = text.split(whereSeparator: \.isWhitespace).count
+        toast.show(words == 1 ? "Copied 1 word · ⌘V to paste" : "Copied \(words) words · ⌘V to paste", symbol: "text.viewfinder")
+    }
+
     /// Remove tracking from copied links (Settings; on unless turned off).
     private var cleanLinks: Bool { UserDefaults.standard.object(forKey: "cleanLinks") as? Bool ?? true }
 
@@ -1317,16 +1379,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         settingsWindow?.makeKeyAndOrderFront(nil)
     }
 
-    func applyShortcuts() -> (open: Bool, previous: Bool) {
-        registerHotKeys()
-        let previous = UserDefaults.standard.string(forKey: "pastePreviousHotkey") ?? SettingsModel.defaultPrevious
-        return (hotKey != nil, previousHotKey != nil || !HotKey.isValid(previous))
-    }
+    func applyShortcuts() -> Set<GlobalShortcut> { registerHotKeys() }
 
-    func pauseShortcuts() {
-        hotKey = nil
-        previousHotKey = nil
-    }
+    func pauseShortcuts() { hotKeys = [:] }
 
     /// Settings wrote new values: refresh what the app keeps at hand.
     func settingsChanged() {
@@ -1342,7 +1397,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         let open = menu.addItem(withTitle: "Open Shelf", action: #selector(openFromMenu), keyEquivalent: "")
-        if let hotKey { open.title = "Open Shelf   \(hotKey.display)" } else { open.title = "Open Shelf (shortcut unavailable)" }
+        if let hotKey = hotKeys[.open] { open.title = "Open Shelf   \(hotKey.display)" } else { open.title = "Open Shelf (shortcut unavailable)" }
+        let grab = menu.addItem(withTitle: "Grab Text from Screen", action: #selector(grabFromMenu), keyEquivalent: "")
+        if let hotKey = hotKeys[.grabText] { grab.title = "Grab Text from Screen   \(hotKey.display)" }
 
         if stackActive {
             menu.addItem(.separator())
@@ -1387,6 +1444,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
     @objc private func openFromMenu() {
         DispatchQueue.main.async { self.show() }
+    }
+
+    @objc private func grabFromMenu() {
+        DispatchQueue.main.async { self.grabText() }   // once the menu has closed
     }
 
     @objc private func skipStackItem() { advanceStack(after: 0) }

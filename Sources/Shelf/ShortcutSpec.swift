@@ -68,3 +68,43 @@ struct ShortcutSpec: Equatable {
             + (key == "space" ? "Space" : key.uppercased())
     }
 }
+
+/// The shortcuts that work anywhere, as Settings lists them.
+enum GlobalShortcut: CaseIterable, Hashable {
+    case open, previous, grabText
+
+    /// The UserDefaults key. An empty string stored there turns the shortcut off (not Open Shelf).
+    var key: String {
+        switch self {
+        case .open: return "hotkey"
+        case .previous: return "pastePreviousHotkey"
+        case .grabText: return "grabTextHotkey"
+        }
+    }
+
+    var fallback: String {
+        switch self {
+        case .open: return "cmd+shift+v"
+        case .previous: return "cmd+option+shift+v"
+        case .grabText: return "cmd+shift+2"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .open: return "Open Shelf"
+        case .previous: return "Paste Previous Copy"
+        case .grabText: return "Grab Text from Screen"
+        }
+    }
+
+    var canTurnOff: Bool { self != .open }
+
+    /// The spec in effect for what's stored: nil when turned off, the default when nothing (or
+    /// something unusable) is stored.
+    func spec(stored: String?) -> ShortcutSpec? {
+        let value = stored ?? fallback
+        if value.isEmpty && canTurnOff { return nil }
+        return ShortcutSpec(value) ?? ShortcutSpec(fallback)
+    }
+}
