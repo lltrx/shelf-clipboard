@@ -21,7 +21,9 @@ All notable changes to Shelf are documented here. The format is based on
   ⌘C to copy it, or ⌘S to save it somewhere.
 - **Paste style per app:** the bottom right of the shelf says what Return pastes in the app you're
   pasting into (for example "Excel: Plain Text"). Click it to choose formatted or plain text for that
-  app; Shelf remembers it. The list is in the Shelf menu under **Paste Style in Apps**.
+  app, or the default for every other app; Shelf remembers it.
+- **Paste Style** in the Shelf menu replaces Paste as Plain Text by Default: choose whether Return pastes
+  **With Formatting** or **Plain Text** by default, and see the apps set differently.
 - **Filter by kind:** ↑ ↓, or the icons next to the search field, show only text, links, images or files.
 - **Drag cards out** of the shelf into other apps. Images arrive as a PNG file with a readable name.
 - A bar at the bottom of the shelf shows what the keys do for the selected card. **Hold ⌘** to see
@@ -32,6 +34,10 @@ All notable changes to Shelf are documented here. The format is based on
   along the row, and the preview and Copy as File fade in. Pasting still closes the shelf at once. With
   **Reduce motion** on (System Settings → Accessibility → Display), things fade instead of moving.
 - The Shelf menu shows the version at the bottom.
+
+### Fixed
+- The first card no longer sits against the shelf's left edge when the shelf opens, and the first and
+  last cards keep their margin when you move to them.
 
 ### Changed
 - Clearer empty states (no matches, empty pinboard, empty filter), each saying what to do next.

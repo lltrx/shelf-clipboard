@@ -1024,11 +1024,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
         let pause = menu.addItem(withTitle: "Pause Capture", action: #selector(togglePause), keyEquivalent: "")
         pause.state = monitor.paused ? .on : .off
-        let plain = menu.addItem(withTitle: "Paste as Plain Text by Default", action: #selector(togglePlainByDefault), keyEquivalent: "")
-        plain.state = model.plainEverywhere ? .on : .off
-        plain.toolTip = "Return pastes without fonts, colors or tables; ⇧Return keeps the formatting"
-        let styles = menu.addItem(withTitle: "Paste Style in Apps", action: nil, keyEquivalent: "")
-        menu.setSubmenu(appStylesMenu(), for: styles)
+        let style = menu.addItem(withTitle: "Paste Style", action: nil, keyEquivalent: "")
+        menu.setSubmenu(pasteStyleMenu(), for: style)
         let ignored = menu.addItem(withTitle: "Ignored Apps", action: nil, keyEquivalent: "")
         menu.setSubmenu(ignoredAppsMenu(), for: ignored)
         let login = menu.addItem(withTitle: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
@@ -1071,7 +1068,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
     @objc private func togglePause() { monitor.paused.toggle() }
 
-    @objc private func togglePlainByDefault() { setPlainEverywhere(!model.plainEverywhere) }
+    @objc private func useFormattedEverywhere() { setPlainEverywhere(false) }
+
+    @objc private func usePlainEverywhere() { setPlainEverywhere(true) }
 
     private func setPlainEverywhere(_ plain: Bool) {
         model.plainEverywhere = plain
@@ -1081,7 +1080,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     // MARK: - Paste style per app
 
     /// Bundle id → whether Return pastes plain text in that app. Only apps you set are listed;
-    /// the rest follow Paste as Plain Text by Default.
+    /// the rest follow the default (Shelf menu → Paste Style).
     private var appStyles: [String: Bool] {
         get { UserDefaults.standard.dictionary(forKey: "pasteStyleByApp") as? [String: Bool] ?? [:] }
         set {
@@ -1093,21 +1092,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     /// The control at the bottom right of the shelf: what Return pastes in the app you're pasting into.
     func showStyleMenu() {
         let menu = NSMenu()
-        let title = model.target.map { "Return in \($0.name) pastes" } ?? "Return pastes"
-        menu.addItem(withTitle: title, action: nil, keyEquivalent: "").isEnabled = false
-        let formatted = menu.addItem(withTitle: "With Formatting", action: #selector(useFormattedHere), keyEquivalent: "")
-        formatted.state = model.plainByDefault ? .off : .on
-        let plain = menu.addItem(withTitle: "Plain Text", action: #selector(usePlainHere), keyEquivalent: "")
-        plain.state = model.plainByDefault ? .on : .off
-        if model.target != nil {
+        if let target = model.target {
+            addStyleChoices(to: menu, heading: "Return in \(target.name) pastes", plain: model.plainByDefault,
+                            formatted: #selector(useFormattedHere), plainText: #selector(usePlainHere))
             menu.addItem(.separator())
-            let others = "Other apps: " + (model.plainEverywhere ? "Plain Text" : "With Formatting")
-            menu.addItem(withTitle: others, action: nil, keyEquivalent: "").isEnabled = false
         }
+        addStyleChoices(to: menu, heading: model.target == nil ? "Default for all apps" : "Default for other apps",
+                        plain: model.plainEverywhere,
+                        formatted: #selector(useFormattedEverywhere), plainText: #selector(usePlainEverywhere))
         menu.addItem(.separator())
         menu.addItem(withTitle: "⇧Return pastes the other way; ⌘K has more", action: nil, keyEquivalent: "").isEnabled = false
-        for entry in menu.items { entry.target = self }
         popUpAtMouse(menu)
+    }
+
+    /// "With Formatting" and "Plain Text" as a pair of choices under a heading; the current one is checked.
+    private func addStyleChoices(to menu: NSMenu, heading: String, plain: Bool, formatted: Selector, plainText: Selector) {
+        menu.addItem(withTitle: heading, action: nil, keyEquivalent: "").isEnabled = false
+        let withFormatting = NSMenuItem(title: "With Formatting", action: formatted, keyEquivalent: "")
+        withFormatting.state = plain ? .off : .on
+        withFormatting.toolTip = "Keeps fonts, colors, links and tables. ⇧Return pastes plain text."
+        let plainOnly = NSMenuItem(title: "Plain Text", action: plainText, keyEquivalent: "")
+        plainOnly.state = plain ? .on : .off
+        plainOnly.toolTip = "Pastes just the text. ⇧Return keeps the formatting."
+        for entry in [withFormatting, plainOnly] {
+            entry.target = self
+            entry.indentationLevel = 1
+            menu.addItem(entry)
+        }
     }
 
     @objc private func useFormattedHere() { setStyleHere(plain: false) }
@@ -1126,24 +1137,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         appStyles = styles
     }
 
-    private func appStylesMenu() -> NSMenu {
+    /// Shelf menu → Paste Style: what Return pastes by default, and the apps set differently.
+    private func pasteStyleMenu() -> NSMenu {
         let menu = NSMenu()
+        addStyleChoices(to: menu, heading: "Return pastes", plain: model.plainEverywhere,
+                        formatted: #selector(useFormattedEverywhere), plainText: #selector(usePlainEverywhere))
+        menu.addItem(.separator())
         let styles = appStyles.map { (bundle: $0.key, name: Self.appName($0.key), plain: $0.value) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        if styles.isEmpty {
-            menu.addItem(withTitle: "No apps set", action: nil, keyEquivalent: "").isEnabled = false
-        }
+        let heading = styles.isEmpty ? "No apps set differently" : "Apps set differently (click one to use the default)"
+        menu.addItem(withTitle: heading, action: nil, keyEquivalent: "").isEnabled = false
         for style in styles {
             let entry = NSMenuItem(title: "\(style.name): \(style.plain ? "Plain Text" : "With Formatting")",
                                    action: #selector(forgetAppStyle(_:)), keyEquivalent: "")
             entry.representedObject = style.bundle
-            entry.state = .on
-            entry.toolTip = "Click to follow Paste as Plain Text by Default in this app again"
+            entry.indentationLevel = 1
+            entry.toolTip = "Click to use the default in this app again"
             entry.target = self
             menu.addItem(entry)
         }
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Set it at the bottom right of the shelf", action: nil, keyEquivalent: "").isEnabled = false
+        menu.addItem(withTitle: "Set an app at the bottom right of the shelf", action: nil, keyEquivalent: "").isEnabled = false
         return menu
     }
 

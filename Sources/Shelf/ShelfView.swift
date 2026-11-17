@@ -334,21 +334,24 @@ struct ShelfView: View {
     private func cards(_ list: [ClipItem]) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 12) {
+                LazyHStack(spacing: 0) {
                     ForEach(Array(list.enumerated()), id: \.element.id) { index, item in
                         CardView(item: item, selected: index == model.selection, now: model.now,
                                  stackPosition: model.stack.firstIndex(of: item.id).map { $0 + 1 },
                                  shortcut: model.commandHeld && index < 9 ? index + 1 : nil,
                                  imageURL: model.actions?.imageURL(item))
-                            .id(item.id)
                             .onTapGesture(count: 2) { model.actions?.paste(item, plain: model.plainByDefault) }
                             .onTapGesture { model.selection = index }
                             .contextMenu { menu(item, index) }
                             .dragOut(item.draggable) { model.actions?.dragItem(item) ?? NSItemProvider() }
+                            // The margins belong to each card, so scrolling to a card keeps them:
+                            // 22 at the ends (like the rest of the shelf), 6 + 6 between cards.
+                            .padding(.leading, index == 0 ? 22 : 6)
+                            .padding(.trailing, index == list.count - 1 ? 22 : 6)
+                            .id(item.id)
                             .transition(.opacity.combined(with: .scale(scale: 0.92)))
                     }
                 }
-                .padding(.horizontal, 22)
                 // Cards ease in and out as you search, filter, pin or delete.
                 .animation(Motion.move(reduceMotion), value: list.map(\.id))
             }

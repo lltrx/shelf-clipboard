@@ -51,15 +51,17 @@ into another app: text, links and files arrive as they are, and images arrive as
 Text copied from Word, Outlook, Notes or a browser keeps its fonts, bold, links and tables.
 **Return** pastes it formatted, **⇧Return** pastes plain text. Formatted cards say "Formatted" at the bottom.
 
+**Choose the default.** In the Shelf menu (menu bar icon, or **⋯** / **⌘,** in the shelf), **Paste
+Style** → **Return pastes** sets what Return, ⌘1…9 and double-click paste: **With Formatting** or
+**Plain Text**. ⇧ always pastes the other way. Cells copied from a spreadsheet paste as plain text
+separated by tabs, one row per line.
+
 **Choose per app.** The bottom right of the shelf says what Return pastes in the app you're pasting
 into, for example **Excel: Plain Text** or **Word: Formatted**. Click it and pick **With Formatting** or
 **Plain Text**; Shelf remembers it for that app, so you can paste plain text into Excel, Terminal and
 Slack and keep formatting in Word and Mail without thinking about it. ⇧Return still pastes the other way.
-The apps you've set are listed in the Shelf menu under **Paste Style in Apps**; click one to forget it.
-
-For every other app, **Paste as Plain Text by Default** in the Shelf menu (menu bar icon, or **⋯** /
-**⌘,** in the shelf) decides. Cells copied from a spreadsheet paste as text separated by tabs, one row
-per line.
+The same menu also sets the default for every other app. The apps you've set are listed under **Paste
+Style** in the Shelf menu; click one to make it follow the default again.
 
 ## Paste As (⌘K)
 
@@ -146,8 +148,8 @@ for the menu below. The ⋯ button is handy when your menu bar is crowded: on Ma
 hides menu bar icons that don't fit, and Shelf's may be one of them.
 
 - **Pause Capture:** stop recording copies until you turn it back on.
-- **Paste as Plain Text by Default:** what Return pastes in apps you haven't set.
-- **Paste Style in Apps:** the apps you've set to formatted or plain text; click one to forget it.
+- **Paste Style:** what Return pastes by default (With Formatting or Plain Text), and the apps you've
+  set differently; click one to make it follow the default again.
 - **Launch at Login:** start Shelf automatically.
 - **Export Pinboards… / Import Pinboards…:** save your pinboards to a file, or bring them back.
 - **Show History Folder:** where everything is stored.

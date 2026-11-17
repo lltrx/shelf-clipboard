@@ -72,7 +72,7 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 | Return (with stack) | Paste stack: pastes item 1, then each ⌘V you press pastes the next |
 | ⌥Return (with stack) | Paste all stacked items at once, one per line |
 | ⌘⌫ | Delete item |
-| ⌘, or ⋯ (top right) | Shelf menu: Pause Capture, Plain Text by Default, Paste Style in Apps, Ignored Apps, Launch at Login, export… |
+| ⌘, or ⋯ (top right) | Shelf menu: Pause Capture, Paste Style (default and per app), Ignored Apps, Launch at Login, export… |
 | Esc | Close preview, then the shelf |
 
 The bar at the bottom of the shelf shows what the keys do for the selected card. At its right,
