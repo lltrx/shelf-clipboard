@@ -27,6 +27,11 @@ All notable changes to Shelf are documented here. The format is based on
 - A bar at the bottom of the shelf shows what the keys do for the selected card. **Hold ⌘** to see
   ⌘1–⌘9 on the cards and every ⌘ shortcut.
 - Text cards that are just a hex color (`#1E90FF`) show the color.
+- **Motion:** the shelf slides up as it opens and fades as it closes, the highlight slides between
+  tabs and filters, cards ease in and out as you search, filter, pin or delete, the selection glides
+  along the row, and the preview and Copy as File fade in. Pasting still closes the shelf at once. With
+  **Reduce motion** on (System Settings → Accessibility → Display), things fade instead of moving.
+- The Shelf menu shows the version at the bottom.
 
 ### Changed
 - Clearer empty states (no matches, empty pinboard, empty filter), each saying what to do next.

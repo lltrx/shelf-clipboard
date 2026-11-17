@@ -123,9 +123,19 @@ final class ShelfModel: ObservableObject {
 
 // MARK: - Shelf
 
+/// Shelf's motion: short and quiet. With Reduce Motion nothing slides or scales; fades stay.
+enum Motion {
+    static let fade = Animation.easeOut(duration: 0.15)
+    static let spring = Animation.spring(response: 0.3, dampingFraction: 0.86)
+
+    static func move(_ reduceMotion: Bool) -> Animation? { reduceMotion ? nil : spring }
+}
+
 struct ShelfView: View {
     @ObservedObject var model: ShelfModel
     @FocusState private var focus: Field?
+    @Namespace private var pills   // the highlight that slides to the selected tab and filter
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Field { case search, name }
 
@@ -163,11 +173,14 @@ struct ShelfView: View {
             }
             .padding(.horizontal, 22)
 
-            if list.isEmpty {
-                emptyState
-            } else {
-                cards(list)
+            Group {
+                if list.isEmpty {
+                    emptyState.transition(.opacity)
+                } else {
+                    cards(list).transition(.opacity)
+                }
             }
+            .animation(Motion.fade, value: list.isEmpty)
 
             footer
                 .padding(.horizontal, 22)
@@ -190,13 +203,20 @@ struct ShelfView: View {
                         .font(.system(size: 11))
                         .frame(width: 24, height: 22)
                         .foregroundStyle(on ? .primary : .secondary)
-                        .background(RoundedRectangle(cornerRadius: 5).fill(on ? Color.primary.opacity(0.12) : .clear))
+                        .background {
+                            if on {
+                                RoundedRectangle(cornerRadius: 5)
+                                    .fill(Color.primary.opacity(0.12))
+                                    .matchedGeometryEffect(id: "kind", in: pills)
+                            }
+                        }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help(tip)
             }
         }
+        .animation(Motion.move(reduceMotion), value: model.kindFilter)
     }
 
     // MARK: Footer
@@ -210,10 +230,12 @@ struct ShelfView: View {
                     Text(hint.label).font(.system(size: 11))
                 }
                 .fixedSize()
+                .transition(.opacity)
             }
             Spacer(minLength: 12)
             styleButton
         }
+        .animation(Motion.fade, value: hints)
         .foregroundStyle(.secondary)
         .lineLimit(1)
         .frame(height: 20)
@@ -271,12 +293,12 @@ struct ShelfView: View {
 
     private var tabs: some View {
         HStack(spacing: 2) {
-            TabButton(title: "History", selected: model.tab == nil) { model.tab = nil }
+            TabButton(title: "History", selected: model.tab == nil, namespace: pills) { model.tab = nil }
             ForEach(model.boards) { board in
                 if model.naming == .rename(board.id) {
                     nameField
                 } else {
-                    TabButton(title: board.name, selected: model.tab == board.id) { model.tab = board.id }
+                    TabButton(title: board.name, selected: model.tab == board.id, namespace: pills) { model.tab = board.id }
                         .contextMenu {
                             Button("Rename") { model.startNaming(.rename(board.id)) }
                             Button("Delete Pinboard") { model.actions?.deleteBoard(board) }
@@ -294,6 +316,7 @@ struct ShelfView: View {
                 .help("New pinboard (⌘N)")
             }
         }
+        .animation(Motion.move(reduceMotion), value: model.tab)
     }
 
     private var nameField: some View {
@@ -322,12 +345,16 @@ struct ShelfView: View {
                             .onTapGesture { model.selection = index }
                             .contextMenu { menu(item, index) }
                             .dragOut(item.draggable) { model.actions?.dragItem(item) ?? NSItemProvider() }
+                            .transition(.opacity.combined(with: .scale(scale: 0.92)))
                     }
                 }
                 .padding(.horizontal, 22)
+                // Cards ease in and out as you search, filter, pin or delete.
+                .animation(Motion.move(reduceMotion), value: list.map(\.id))
             }
             .onChange(of: model.selection) {
-                if let id = model.selected?.id { proxy.scrollTo(id) }
+                guard let id = model.selected?.id else { return }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo(id) }
             }
             .onChange(of: model.focusTick) {
                 if let id = list.first?.id { proxy.scrollTo(id, anchor: .leading) }
@@ -473,6 +500,7 @@ extension View {
 struct TabButton: View {
     let title: String
     let selected: Bool
+    let namespace: Namespace.ID   // the selected tab's highlight slides between tabs
     let action: () -> Void
 
     var body: some View {
@@ -482,7 +510,13 @@ struct TabButton: View {
                 .foregroundStyle(selected ? .primary : .secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Color.primary.opacity(0.12) : .clear))
+                .background {
+                    if selected {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.primary.opacity(0.12))
+                            .matchedGeometryEffect(id: "tab", in: namespace)
+                    }
+                }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -496,6 +530,7 @@ struct CardView: View {
     let stackPosition: Int?
     let shortcut: Int?          // 1…9 while ⌘ is held: ⌘ and that number pastes this card
     let imageURL: URL?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -523,20 +558,27 @@ struct CardView: View {
                 Spacer()
                 if let stackPosition {
                     Text("Stack \(stackPosition)").font(.system(size: 10, weight: .medium)).foregroundStyle(Color.accentColor)
+                        .transition(.opacity)
                 } else if item.pinned {
                     Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary)
+                        .transition(.opacity)
                 }
                 if let shortcut {
                     Text("⌘\(shortcut)").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                        .transition(.opacity)
                 }
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
         }
         .frame(width: 220, height: 220)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(selected ? 0.1 : 0.06)))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(borderColor, lineWidth: selected || stackPosition != nil ? 2 : 1))
         .contentShape(RoundedRectangle(cornerRadius: 10))
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: selected)
+        .animation(Motion.fade, value: shortcut)
+        .animation(Motion.fade, value: stackPosition)
+        .animation(Motion.fade, value: item.pinned)
     }
 
     private var borderColor: Color {

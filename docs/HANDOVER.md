@@ -59,6 +59,12 @@ stays frontmost, so the paste lands there. Keys are handled in one local `NSEven
 (`handleKey` / `handleEditorKey`) using physical key codes, so shortcuts work in any keyboard layout
 (including Arabic). The panels hide when focus leaves both of them.
 
+**Motion.** `show()` slides and fades the shelf in with `NSAnimationContext`; `hide(animated:)` fades
+it out, except after a paste (`hide(animated: false)`): the synthetic ⌘V must reach the app below, not
+the fading panel. `shelfOpen` is the shelf's real state, since the panel stays on screen while it
+fades, and `panelAnimation` stops a finished fade-out from hiding a shelf reopened meanwhile. SwiftUI
+animations use the `Motion` constants and drop movement when Reduce Motion is on.
+
 **Pasting.** The item is written to the pasteboard, the panel hides, and a synthetic ⌘V is posted
 with `CGEvent` (tagged with `eventSourceUserData` so the paste stack can tell it from a real ⌘V).
 Posting key events requires **Accessibility** permission. Without it, the item is still on the

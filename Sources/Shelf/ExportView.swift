@@ -58,6 +58,7 @@ struct ExportView: View {
                                 .font(.system(size: 12).monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
+                        .transition(.opacity)
                     }
                     if draft.showsImageOptions {
                         field("Size") {
@@ -70,6 +71,7 @@ struct ExportView: View {
                             .labelsHidden()
                             .fixedSize()
                         }
+                        .transition(.opacity)
                     }
                     field("") {
                         Text(result(draft))
@@ -81,8 +83,12 @@ struct ExportView: View {
                         field("") {
                             Text(error).font(.system(size: 11)).foregroundStyle(.red).lineLimit(3)
                         }
+                        .transition(.opacity)
                     }
                 }
+                // Quality and Size come and go with the format.
+                .animation(Motion.fade, value: draft.format)
+                .animation(Motion.fade, value: draft.error)
                 Spacer(minLength: 0)
             }
             .padding(18)
@@ -90,7 +96,7 @@ struct ExportView: View {
             Spacer(minLength: 0)
             Divider()
             HStack(spacing: 10) {
-                if draft.busy { ProgressView().controlSize(.small) }
+                if draft.busy { ProgressView().controlSize(.small).transition(.opacity) }
                 Spacer()
                 Button("Cancel") { model.actions?.cancelExport() }
                     .keyboardShortcut(.cancelAction)
@@ -100,6 +106,7 @@ struct ExportView: View {
                     .keyboardShortcut(.defaultAction)
             }
             .disabled(draft.busy)
+            .animation(Motion.fade, value: draft.busy)
             .padding(12)
         }
         .task(id: estimateKey(draft)) { await updateEstimate(draft) }

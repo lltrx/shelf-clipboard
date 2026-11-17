@@ -68,6 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     private var statusItem: NSStatusItem!
     private var keyMonitor: Any?
     private var flagsMonitor: Any?
+    private var shelfOpen = false                  // stays false while the shelf fades out
+    private var panelAnimation = 0                 // bumped by show/hide, so a finished fade-out can't hide a reopened shelf
     private var commandHold: DispatchWorkItem?   // shows the ⌘ shortcuts once ⌘ has been held a moment
     private var pruneTimer: Timer?
 
@@ -129,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         // Hide only when focus leaves both panels (moving into the editor is fine).
         let focusCheck = { [unowned self] in
             DispatchQueue.main.async { [self] in
-                if !panel.isKeyWindow && !preview.isKeyWindow { hide() }
+                if shelfOpen && !panel.isKeyWindow && !preview.isKeyWindow { hide() }
             }
         }
         panel.onResignKey = focusCheck
@@ -146,6 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
                 return handled ? nil : event
             }
             guard event.window === panel else { return event }
+            guard shelfOpen else { return nil }    // fading out: nothing more to do in it
             return handleKey(event) ? nil : event
         }
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [unowned self] event in
@@ -256,15 +259,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     }
 
     private func toggle() {
-        panel.isVisible ? hide() : show()
+        shelfOpen ? hide() : show()
     }
 
     private func show() {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
         guard let frame = screen?.visibleFrame else { return }
-        panel.setFrame(NSRect(x: frame.minX + 8, y: frame.minY + 8, width: frame.width - 16, height: panelHeight),
-                       display: false)
+        let target = NSRect(x: frame.minX + 8, y: frame.minY + 8, width: frame.width - 16, height: panelHeight)
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        shelfOpen = true
+        panelAnimation += 1
+        // Starts a little low and transparent, then slides up into place (with Reduce Motion it only fades).
+        panel.setFrame(reduceMotion ? target : target.offsetBy(dx: 0, dy: -16), display: false)
+        panel.alphaValue = 0
         // The shelf doesn't take focus from the app you're in, so that's where Return will paste.
         let front = NSWorkspace.shared.frontmostApplication
         if let front, let bundle = front.bundleIdentifier, bundle != Bundle.main.bundleIdentifier {
@@ -272,22 +280,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         } else {
             model.target = nil
         }
-        model.query = ""
-        model.tab = nil
-        model.kindFilter = nil
-        model.selection = 0
-        model.stack = []
-        model.naming = nil
-        model.exportDraft = nil
-        model.commandHeld = false
-        model.password = monitor.concealedOnClipboard.map(ClipItem.concealedPlaceholder)
-        model.now = Date()
-        reload()
+        // The shelf opens fresh, so resetting it isn't animated.
+        var reset = Transaction()
+        reset.disablesAnimations = true
+        withTransaction(reset) {
+            model.query = ""
+            model.tab = nil
+            model.kindFilter = nil
+            model.selection = 0
+            model.stack = []
+            model.naming = nil
+            model.exportDraft = nil
+            model.commandHeld = false
+            model.password = monitor.concealedOnClipboard.map(ClipItem.concealedPlaceholder)
+            model.now = Date()
+            reload()
+        }
         panel.makeKeyAndOrderFront(nil)
         model.focusTick += 1
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = reduceMotion ? 0.12 : 0.22
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.25, 1)
+            self.panel.animator().alphaValue = 1
+            self.panel.animator().setFrame(target, display: true)
+        }
     }
 
-    private func hide() {
+    /// Closes the shelf. After a paste it closes at once, so the app underneath gets ⌘V straight
+    /// away (and not the fading shelf); otherwise it fades out.
+    private func hide(animated: Bool = true) {
+        shelfOpen = false
         model.editing = false
         model.previewing = false
         model.naming = nil
@@ -296,7 +318,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         model.commandHeld = false
         preview.allowsKey = false
         preview.orderOut(nil)
-        panel.orderOut(nil)
+        panelAnimation += 1
+        let generation = panelAnimation
+        guard animated, panel.isVisible else {
+            panel.orderOut(nil)
+            panel.alphaValue = 1
+            return
+        }
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.14
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            self.panel.animator().alphaValue = 0
+        }, completionHandler: {
+            guard self.panelAnimation == generation else { return }   // reopened meanwhile
+            self.panel.orderOut(nil)
+            self.panel.alphaValue = 1
+        })
+    }
+
+    /// Brings a panel in with a short fade (fine with Reduce Motion too: nothing moves).
+    private func fadeIn(_ window: NSWindow) {
+        if !window.isVisible { window.alphaValue = 0 }
+        window.orderFront(nil)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.16
+            window.animator().alphaValue = 1
+        }
+    }
+
+    /// Moves or resizes a panel, smoothly when it's on screen (at once with Reduce Motion).
+    private func place(_ window: NSWindow, _ frame: NSRect, animate: Bool) {
+        guard animate, window.isVisible, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            window.setFrame(frame, display: true)
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            window.animator().setFrame(frame, display: true)
+        }
     }
 
     private func reload() {
@@ -320,16 +380,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             return
         }
         placePreview()
-        preview.orderFront(nil)
+        fadeIn(preview)
     }
 
     /// The preview's place: centered above the shelf, as tall as the screen allows.
-    private func placePreview() {
+    private func placePreview(animate: Bool = false) {
         guard let vf = panel.screen?.visibleFrame else { return }
         let bottom = panel.frame.maxY + 12
         let width = min(920, vf.width * 0.7)
         let height = max(220, min(580, vf.maxY - bottom - 12))
-        preview.setFrame(NSRect(x: vf.midX - width / 2, y: bottom, width: width, height: height), display: true)
+        place(preview, NSRect(x: vf.midX - width / 2, y: bottom, width: width, height: height), animate: animate)
     }
 
     func edit(_ item: ClipItem) {
@@ -474,12 +534,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
     func paste(_ item: ClipItem, plain: Bool) {
         if item.concealed {           // the password is already on the clipboard; just paste it
-            hide()
+            hide(animated: false)
             postPaste()
             return
         }
         write(item, plain: plain)
-        hide()
+        hide(animated: false)
         postPaste()
     }
 
@@ -585,7 +645,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         monitor.markOwnChange()
         store.touch(item.id)
         reload()
-        hide()
+        hide(animated: false)
         postPaste()
     }
 
@@ -655,9 +715,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         guard let vf = panel.screen?.visibleFrame else { return }
         let width = min(720, vf.width * 0.7)
         let height = min(320, max(240, vf.maxY - panel.frame.maxY - 24))
-        preview.setFrame(NSRect(x: vf.midX - width / 2, y: panel.frame.maxY + 12, width: width, height: height), display: true)
+        // Resizes from the preview when it was open, fades in when it wasn't.
+        place(preview, NSRect(x: vf.midX - width / 2, y: panel.frame.maxY + 12, width: width, height: height), animate: true)
         preview.allowsKey = true
-        preview.orderFront(nil)
+        fadeIn(preview)
         preview.makeKey()
     }
 
@@ -666,7 +727,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         guard model.exportDraft != nil else { return }
         model.exportDraft = nil
         preview.allowsKey = false
-        if model.previewing { placePreview() } else { preview.orderOut(nil) }
+        if model.previewing { placePreview(animate: true) } else { preview.orderOut(nil) }
         if panel.isVisible { panel.makeKey() }
     }
 
@@ -720,7 +781,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
                 monitor.markOwnChange()
                 store.touch(item.id)
                 reload()
-                hide()
+                hide(animated: action != .paste)
                 if action == .paste { postPaste() }
             case .save:
                 hide()
@@ -840,7 +901,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     private func startStack(plain: Bool) {
         let items = model.stack.compactMap { id in model.items.first { $0.id == id } }
         guard let first = items.first else { return }
-        hide()
+        hide(animated: false)
         stackItems = items
         stackIndex = 0
         stackPlain = plain
@@ -889,7 +950,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         pb.clearContents()
         pb.setString(texts.joined(separator: "\n"), forType: .string)
         monitor.markOwnChange()
-        hide()
+        hide(animated: false)
         postPaste()
     }
 
@@ -981,6 +1042,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         menu.addItem(withTitle: "Show History Folder", action: #selector(openFolder), keyEquivalent: "")
         menu.addItem(withTitle: "Clear Unpinned History…", action: #selector(clearHistory), keyEquivalent: "")
         menu.addItem(.separator())
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        menu.addItem(withTitle: "Shelf \(version)", action: nil, keyEquivalent: "").isEnabled = false
         menu.addItem(withTitle: "Quit Shelf", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         for item in menu.items where item.action != #selector(NSApplication.terminate(_:)) { item.target = self }
     }
