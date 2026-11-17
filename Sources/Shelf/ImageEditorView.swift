@@ -33,6 +33,7 @@ struct ImageEditorView: View {
                         .font(.system(size: 12))
                         .frame(maxWidth: 240)
                         .focused($textFocused)
+                        .id(editor.typing)   // a new field for each text, so the last one's words don't carry over
                 } else if editor.tool.usesColor {
                     HStack(spacing: 5) {
                         ForEach(Array(MarkColor.allCases.enumerated()), id: \.element) { index, color in swatch(color, index) }

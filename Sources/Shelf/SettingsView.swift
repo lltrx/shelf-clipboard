@@ -216,12 +216,22 @@ final class SettingsModel: ObservableObject {
 
     var canCaptureScreen: Bool { CGPreflightScreenCaptureAccess() }
 
-    /// Asks macOS (it shows its prompt the first time), then opens the Screen Recording settings.
-    func allowScreenCapture() {
-        if !CGRequestScreenCaptureAccess(),
-           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+    func allowScreenCapture() { _ = Self.askForScreenCapture() }
+
+    /// The first time, asks macOS, which shows its own prompt. After that (macOS asks only once), opens
+    /// the Screen Recording settings and returns true. (The request answers false right away, even
+    /// while its prompt is up, so whether it was asked is remembered.)
+    static func askForScreenCapture() -> Bool {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: "askedScreenCapture") else {
+            defaults.set(true, forKey: "askedScreenCapture")
+            _ = CGRequestScreenCaptureAccess()
+            return false
+        }
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
             NSWorkspace.shared.open(url)
         }
+        return true
     }
 
     func allowAutoPaste() {

@@ -1369,12 +1369,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     func grabText() {
         guard !grabbing else { return }
         guard CGPreflightScreenCaptureAccess() else {
-            // macOS shows its prompt the first time; after that, the setting has to be turned on.
-            if !CGRequestScreenCaptureAccess() {
+            // The first time, macOS shows its own prompt; after that, the setting has to be turned on.
+            if SettingsModel.askForScreenCapture() {
                 toast.show("Allow Shelf in Screen Recording, then try again", symbol: "lock.shield")
-                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-                    NSWorkspace.shared.open(url)
-                }
             }
             return
         }
@@ -1391,6 +1388,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     private func grabFinished(_ recognized: String?) {
         grabbing = false
         guard let recognized else { return }
+        if stackActive { endStack() }   // new text on the clipboard ends the stack, as a copy would
         let text = recognized.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
             NSSound.beep()

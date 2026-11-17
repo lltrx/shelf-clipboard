@@ -31,12 +31,14 @@ final class Toast {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in
             guard let self, self.generation == shown else { return }   // a newer message replaced it
-            NSAnimationContext.runAnimationGroup({ context in
+            NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.3
                 self.panel.animator().alphaValue = 0
-            }, completionHandler: {
-                if self.generation == shown { self.panel.orderOut(nil) }
-            })
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) { [weak self] in
+            guard let self, self.generation == shown else { return }
+            self.panel.orderOut(nil)
         }
     }
 }
