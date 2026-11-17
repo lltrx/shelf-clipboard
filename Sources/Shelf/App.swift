@@ -1,5 +1,4 @@
 import AppKit
-import ServiceManagement
 import UniformTypeIdentifiers
 import SwiftUI
 
@@ -61,7 +60,7 @@ final class ShelfPanel: NSPanel {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfActions {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfActions, SettingsActions {
     /// Unpinned history is kept this many days (0: forever). Settings → History.
     private var historyDays: Int { UserDefaults.standard.object(forKey: "historyDays") as? Int ?? 30 }
     /// Secrets (keys, tokens, passwords) are deleted after this many minutes (0: kept like any card).
@@ -74,6 +73,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     private let monitor = Monitor()
     private let screenshots = ScreenshotWatcher()
     private let model = ShelfModel()
+    private let settings = SettingsModel()
+    private var settingsWindow: NSWindow?
+    private var prunedDays: Int?   // the history length the last prune used
     private let panel = ShelfPanel()
     private let preview = ShelfPanel()
     private let popover = ShelfPanel()   // the paste box, just above the selected card
@@ -109,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             return
         }
         model.actions = self
+        settings.actions = self
         model.plainEverywhere = UserDefaults.standard.bool(forKey: "pastePlainByDefault")
         model.askBeforePasting = UserDefaults.standard.object(forKey: "askBeforePasting") as? Bool ?? true
         model.appStyles = appStyles
@@ -170,6 +173,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [unowned self] event in
             if event.window === popover { return handleExportKey(event) ? nil : event }
+            if event.window === settingsWindow, event.keyCode == 13, event.modifierFlags.contains(.command) {
+                settingsWindow?.performClose(nil)   // ⌘W (Shelf has no menu bar of its own to do it)
+                return nil
+            }
             if event.window === preview { return handleEditorKey(event) ? nil : event }
             guard event.window === panel else { return event }
             guard shelfOpen else { return nil }    // fading out: nothing more to do in it
@@ -252,7 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         case 8 where model.query.isEmpty: model.selected.map(copy); return true // C
         case 40: showPasteMenu(); return true                               // K: Paste As…
         case 45: model.startNaming(.new); return true                       // N
-        case 43: showMenu(); return true                                    // , (Shelf menu)
+        case 43: showSettings(); return true                                // ,: Settings
         case 1:                                                             // S: add to stack, move on
             if let item = model.selected { model.toggleStack(item); model.move(1) }
             return true
@@ -363,6 +370,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     }
 
     private func show() {
+        // Shelf steps aside (hides) after Save… and Settings; its panels need it shown again.
+        if NSApp.isHidden { NSApp.unhideWithoutActivation() }
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
         guard let frame = screen?.visibleFrame else { return }
@@ -1193,6 +1202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     /// Runs at launch and hourly: expire old history and day-old exported files, then take the daily
     /// pinboard backup.
     private func prune() {
+        prunedDays = historyDays
         if historyDays > 0 { store.prune(olderThan: Date().addingTimeInterval(-Double(historyDays) * 86400)) }
         store.deleteExpired()
         FileExport.prune(exportsDir)
@@ -1228,6 +1238,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         button.imagePosition = .imageLeading
     }
 
+    // MARK: - Settings
+
+    /// ⌘, in the shelf, or Settings… in the Shelf menu.
+    @objc func showSettings() {
+        if shelfOpen { hide(animated: false) }
+        if settingsWindow == nil {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 640),
+                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            window.title = "Shelf Settings"
+            window.isReleasedWhenClosed = false
+            window.contentView = NSHostingView(rootView: SettingsView(settings: settings))
+            window.center()
+            NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window,
+                                                   queue: .main) { [weak self] _ in
+                self?.settings.stopRecording()
+                // Then step aside, so the app you were in is frontmost again and ⇧⌘V pastes there.
+                DispatchQueue.main.async { NSApp.hide(nil) }
+            }
+            settingsWindow = window
+        }
+        NSApp.activate()
+        settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    func applyShortcuts() -> (open: Bool, previous: Bool) {
+        registerHotKeys()
+        let previous = UserDefaults.standard.string(forKey: "pastePreviousHotkey") ?? SettingsModel.defaultPrevious
+        return (hotKey != nil, previousHotKey != nil || !HotKey.isValid(previous))
+    }
+
+    func pauseShortcuts() {
+        hotKey = nil
+        previousHotKey = nil
+    }
+
+    /// Settings wrote new values: refresh what the app keeps at hand.
+    func settingsChanged() {
+        let defaults = UserDefaults.standard
+        model.plainEverywhere = defaults.bool(forKey: "pastePlainByDefault")
+        model.askBeforePasting = defaults.object(forKey: "askBeforePasting") as? Bool ?? true
+        model.appStyles = appStyles
+        monitor.ignoredApps = Set(ignoredApps)
+        if addScreenshots { screenshots.start() } else { screenshots.stop() }
+        if historyDays != prunedDays { prune() }   // a shorter history takes effect now
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         let open = menu.addItem(withTitle: "Open Shelf", action: #selector(openFromMenu), keyEquivalent: "")
@@ -1244,18 +1300,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
         let pause = menu.addItem(withTitle: "Pause Capture", action: #selector(togglePause), keyEquivalent: "")
         pause.state = monitor.paused ? .on : .off
-        let shots = menu.addItem(withTitle: "Add Screenshots", action: #selector(toggleScreenshots), keyEquivalent: "")
-        shots.state = addScreenshots ? .on : .off
-        shots.toolTip = "Screenshots saved as files (⇧⌘3, ⇧⌘4, ⇧⌘5) appear in the shelf, ready to paste"
-        let ask = menu.addItem(withTitle: "Ask Before Pasting Images and Files", action: #selector(toggleAskBeforePasting), keyEquivalent: "")
-        ask.state = model.askBeforePasting ? .on : .off
-        ask.toolTip = "Return opens a small box to rename, resize or convert first; ⇧Return pastes right away"
-        let style = menu.addItem(withTitle: "Paste Style", action: nil, keyEquivalent: "")
-        menu.setSubmenu(pasteStyleMenu(), for: style)
-        let ignored = menu.addItem(withTitle: "Ignored Apps", action: nil, keyEquivalent: "")
-        menu.setSubmenu(ignoredAppsMenu(), for: ignored)
-        let login = menu.addItem(withTitle: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
         if !AXIsProcessTrusted() {
             menu.addItem(withTitle: "Allow Auto-Paste…", action: #selector(openAccessibility), keyEquivalent: "")
         }
@@ -1295,23 +1340,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
     @objc private func togglePause() { monitor.paused.toggle() }
 
-    @objc private func toggleScreenshots() { addScreenshots.toggle() }
-
-    @objc private func toggleAskBeforePasting() {
-        model.askBeforePasting.toggle()
-        UserDefaults.standard.set(model.askBeforePasting, forKey: "askBeforePasting")
-    }
-
     // MARK: - Screenshots
 
-    /// Add Screenshots (on unless turned off): screenshot files appear in the shelf.
-    private var addScreenshots: Bool {
-        get { UserDefaults.standard.object(forKey: "addScreenshots") as? Bool ?? true }
-        set {
-            UserDefaults.standard.set(newValue, forKey: "addScreenshots")
-            newValue ? screenshots.start() : screenshots.stop()
-        }
-    }
+    /// Add Screenshots (Settings; on unless turned off): screenshot files appear in the shelf.
+    private var addScreenshots: Bool { UserDefaults.standard.object(forKey: "addScreenshots") as? Bool ?? true }
 
     /// A new screenshot file: added to History as an image, as if it had been copied. Paused
     /// capture and an ignored Screenshot app skip it, as they do copies.
@@ -1396,36 +1428,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         appStyles = styles
     }
 
-    /// Shelf menu → Paste Style: what Return pastes by default, and the apps set differently.
-    private func pasteStyleMenu() -> NSMenu {
-        let menu = NSMenu()
-        addStyleChoices(to: menu, heading: "Return pastes", plain: model.plainEverywhere,
-                        formatted: #selector(useFormattedEverywhere), plainText: #selector(usePlainEverywhere))
-        menu.addItem(.separator())
-        let styles = appStyles.map { (bundle: $0.key, name: Self.appName($0.key), plain: $0.value) }
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        let heading = styles.isEmpty ? "No apps set differently" : "Apps set differently (click one to use the default)"
-        menu.addItem(withTitle: heading, action: nil, keyEquivalent: "").isEnabled = false
-        for style in styles {
-            let entry = NSMenuItem(title: "\(style.name): \(style.plain ? "Plain Text" : "With Formatting")",
-                                   action: #selector(forgetAppStyle(_:)), keyEquivalent: "")
-            entry.representedObject = style.bundle
-            entry.indentationLevel = 1
-            entry.toolTip = "Click to use the default in this app again"
-            entry.target = self
-            menu.addItem(entry)
-        }
-        menu.addItem(withTitle: "Set an app at the bottom right of the shelf", action: nil, keyEquivalent: "").isEnabled = false
-        return menu
-    }
-
-    @objc private func forgetAppStyle(_ sender: NSMenuItem) {
-        guard let bundle = sender.representedObject as? String else { return }
-        var styles = appStyles
-        styles[bundle] = nil
-        appStyles = styles
-    }
-
     private func popUpAtMouse(_ menu: NSMenu) {
         guard let view = panel.contentView else { return }
         let point = view.convert(panel.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
@@ -1448,60 +1450,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         ignoredApps.append(bundle)
     }
 
-    private func ignoredAppsMenu() -> NSMenu {
-        let menu = NSMenu()
-        if ignoredApps.isEmpty {
-            menu.addItem(withTitle: "No ignored apps", action: nil, keyEquivalent: "").isEnabled = false
-        }
-        for bundle in ignoredApps {
-            let item = NSMenuItem(title: Self.appName(bundle), action: #selector(stopIgnoring(_:)), keyEquivalent: "")
-            item.representedObject = bundle
-            item.state = .on
-            item.toolTip = "Click to record copies from this app again"
-            item.target = self
-            menu.addItem(item)
-        }
-        menu.addItem(.separator())
-        let add = menu.addItem(withTitle: "Add App…", action: #selector(addIgnoredApp), keyEquivalent: "")
-        add.target = self
-        let note = menu.addItem(withTitle: "Password managers are always skipped", action: nil, keyEquivalent: "")
-        note.isEnabled = false
-        return menu
-    }
-
-    @objc private func stopIgnoring(_ sender: NSMenuItem) {
-        guard let bundle = sender.representedObject as? String else { return }
-        ignoredApps.removeAll { $0 == bundle }
-    }
-
-    @objc private func addIgnoredApp() {
-        NSApp.activate()
-        let open = NSOpenPanel()
-        open.allowedContentTypes = [.application]
-        open.directoryURL = URL(fileURLWithPath: "/Applications")
-        open.prompt = "Ignore"
-        open.message = "Shelf won't record anything copied in this app."
-        guard open.runModal() == .OK, let url = open.url,
-              let bundle = Bundle(url: url)?.bundleIdentifier, !ignoredApps.contains(bundle) else { return }
-        ignoredApps.append(bundle)
-    }
-
     static func appName(_ bundle: String) -> String {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { return bundle }
         return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
-    }
-
-    @objc private func toggleLogin() {
-        do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-            } else {
-                try SMAppService.mainApp.register()
-            }
-        } catch {
-            NSApp.activate()
-            NSAlert(error: error).runModal()
-        }
     }
 
     @objc private func openAccessibility() {

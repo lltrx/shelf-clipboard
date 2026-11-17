@@ -172,7 +172,7 @@ struct ShelfView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .help("Shelf menu (⌘,)")
+                    .help("Shelf menu · ⌘, Settings")
                 }
                 .frame(width: 300, alignment: .trailing)
             }
