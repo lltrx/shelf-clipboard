@@ -30,7 +30,7 @@ shelf_clipboard/
     ├── App.swift            AppDelegate: panels, keyboard, paste, Paste As, Copy as File, stack, pinboards,
     │                        paste style per app, OCR queue, menu bar
     ├── ShelfView.swift      SwiftUI: ShelfModel, shelf, filters, tabs, cards, bottom bar, preview, thumbnails
-    ├── ExportView.swift     SwiftUI: the Copy as File form (shown in the preview panel)
+    ├── ExportView.swift     SwiftUI: the paste box (rename, resize, convert) and its arrow shape
     ├── PasteOptions.swift   Paste As options, text transforms, Markdown writer, hex colors (Foundation only)
     ├── ExportPlan.swift     Copy as File formats, file naming, form state (Foundation only)
     ├── FileExport.swift     Image conversion (ImageIO), writing exports, pruning the Exports folder
@@ -91,8 +91,14 @@ built from the card's attributed string by `AppDelegate.markdown` (bold/italic/m
 traits, links from `.link`) and `MarkdownWriter`. Transformed text is written to the pasteboard with
 `markOwnChange()`, so it isn't recorded as a new card.
 
-**Copy as File (⌘R).** `startExport` fills an `ExportDraft` (names, formats, what can be converted)
-and shows `ExportView` in the preview panel, which then takes key focus like the editor does.
+**The paste box (Return on an image or file, ⌘R on any card).** `pasteFromCard` decides: images and
+files open the box when `askBeforePasting` is on, everything else pastes. `startExport` fills an
+`ExportDraft` (names, formats, what can be converted; `startName`/`startFormat` remember how it
+opened) and shows `ExportView` in its own panel (`popover`, plain-hosted so the SwiftUI view draws its
+rounded shape and arrow), placed above the shelf with the arrow at the selected card's center
+(`selectedCardMidX`, reported by a `GeometryReader` on that card). The box has a fixed height per card
+(`popoverHeight`). `pastesOriginal` (an image or file with nothing changed) makes Return and ⌘C act on
+the card itself, as before the box existed.
 `ExportDraft.fileNames` (via `ExportNaming`) decides the final names. On Return / ⌘C / ⌘S, text is
 turned into bytes on the main thread (AppKit's RTF/DOCX/HTML writers), then `FileExport.write` converts
 images (ImageIO thumbnail API with the transform applied; JPEG is flattened onto white; the dpi is
@@ -123,8 +129,8 @@ Exports/         <uuid>/<name>: files made by Copy as File and image drags, dele
 ```
 
 Settings (UserDefaults, `com.turkifaisal.shelf`): `hotkey`, `addScreenshots`, `pastePlainByDefault`, `pasteStyleByApp`
-(bundle id → Bool, true = plain text), `ignoredApps`, and the last Copy as File choices
-`exportImageFormat`, `exportTextFormat`, `exportQuality`.
+(bundle id → Bool, true = plain text), `askBeforePasting`, `ignoredApps`, and the last paste box choices
+`exportTextFormat`, `exportQuality`.
 
 Schema (`PRAGMA user_version = 2`):
 

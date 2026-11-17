@@ -13,12 +13,15 @@ All notable changes to Shelf are documented here. The format is based on
   spaces, shared indentation and extra blank lines), Join Lines, and Format JSON (keeps key order).
   Links: Remove Tracking (utm_…, fbclid, gclid and others). Images: Paste Text in Image (the text Shelf
   recognized). Files: Paste File Paths or File Names. The card itself isn't changed.
-- **Copy as File (⌘R, or right-click):** turn a card into a file with the name and format you choose.
-  Images and image files convert to PNG, JPEG, HEIC, TIFF, GIF or PDF, with a quality slider for JPEG
-  and HEIC and a size option (75%, 50%, 25%); the form shows the resulting size before you commit.
-  Text becomes a Plain Text (any extension you type, such as `deploy.sh`), Markdown, RTF, Word or HTML
-  file. Any other file can be renamed. Then press Return to paste the file (into Finder, Mail, Slack…),
-  ⌘C to copy it, or ⌘S to save it somewhere.
+- **Rename, resize or convert before pasting:** Return on an image or file opens a small box just above
+  the card, with the name, a format menu (PNG, JPEG, HEIC, TIFF, GIF, PDF), the size (75%, 50%, 25%)
+  and quality, and the result's real size next to the original's. Return again pastes: the original if
+  nothing changed (so Return, Return is a normal paste), otherwise the new file. ⇧Return pastes the
+  original straight away; ⌘C copies, ⌘S saves. Turn it off with **Ask Before Pasting Images and
+  Files** in the Shelf menu.
+- **Copy as File (⌘R, or right-click):** the same box for any card. Text becomes a Plain Text (any
+  extension you type, such as `deploy.sh`), Markdown, RTF, Word or HTML file. Renaming a JPEG or HEIC
+  without resizing copies it unchanged.
 - **Paste style per app:** the bottom right of the shelf says what Return pastes in the app you're
   pasting into (for example "Excel: Plain Text"). Click it to choose formatted or plain text for that
   app, or the default for every other app; Shelf remembers it.

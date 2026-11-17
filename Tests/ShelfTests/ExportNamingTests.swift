@@ -88,6 +88,55 @@ final class ExportNamingTests: XCTestCase {
         XCTAssertEqual(draft(["IMG_1.HEIC"], [true], .jpeg, name: "Cat").namesSummary, "Cat.jpg")
     }
 
+    func testFormatOfAFile() {
+        XCTAssertEqual(ExportFormat.of(extension: "JPEG"), .jpeg)
+        XCTAssertEqual(ExportFormat.of(extension: "heif"), .heic)
+        XCTAssertEqual(ExportFormat.of(extension: "png"), .png)
+        XCTAssertNil(ExportFormat.of(extension: "pdf"))     // not an image Shelf converts from
+        XCTAssertNil(ExportFormat.of(extension: "webp"))    // readable, but not written
+    }
+
+    func testPasteBoxPastesTheOriginalUntilSomethingChanges() {
+        var d = draft(["shot.png"], [true], .png, name: "shot")
+        d.startName = "shot"
+        d.startFormat = .png
+        XCTAssertTrue(d.pastesOriginal)
+        d.scale = 0.5
+        XCTAssertFalse(d.pastesOriginal)
+        d.scale = 1
+        d.name = "invoice"
+        XCTAssertFalse(d.pastesOriginal)
+        d.name = "shot"
+        d.format = .jpeg
+        XCTAssertFalse(d.pastesOriginal)
+    }
+
+    func testTextAlwaysBecomesAFile() {
+        let item = ClipItem(id: 2, kind: .text, text: "hi", image: nil, detail: nil, sourceBundle: nil, sourceName: nil,
+                            created: Date(), board: nil, formatted: false, ocr: nil)
+        let d = ExportDraft(item: item, source: .text, originals: ["hi.txt"], convertible: [true], formats: ExportFormat.text,
+                            name: "hi", format: .txt, startName: "hi", startFormat: .txt)
+        XCTAssertTrue(d.isUnchanged)
+        XCTAssertFalse(d.pastesOriginal)
+        XCTAssertFalse(d.hasImages)
+        XCTAssertEqual(d.popoverHeight, 156)
+    }
+
+    func testImagesGetASizeRow() {
+        XCTAssertTrue(draft(["a.png", "b.pdf"], [true, false], .original).hasImages)
+        XCTAssertFalse(draft(["b.pdf"], [false], .original).hasImages)
+        XCTAssertEqual(draft(["a.png"], [true], .png).popoverHeight, 193)
+    }
+
+    func testQualitySnapsToASteps() {
+        XCTAssertEqual(ExportDraft.nearestQuality(0.87), 0.9, accuracy: 0.001)
+        XCTAssertEqual(ExportDraft.nearestQuality(0.78), 0.8, accuracy: 0.001)
+        XCTAssertEqual(ExportDraft.nearestQuality(0.05), 0.3, accuracy: 0.001)
+        XCTAssertTrue(ExportDraft.qualities.contains(ExportDraft(item: ClipItem(id: 1, kind: .image, text: nil, image: nil,
+            detail: nil, sourceBundle: nil, sourceName: nil, created: Date(), board: nil, formatted: false, ocr: nil),
+            source: .image, originals: ["a.png"], convertible: [true], formats: [.png], name: "a", format: .png).quality))
+    }
+
     func testFormatExtensions() {
         XCTAssertEqual(ExportFormat.jpeg.fileExtension, "jpg")
         XCTAssertNil(ExportFormat.original.fileExtension)

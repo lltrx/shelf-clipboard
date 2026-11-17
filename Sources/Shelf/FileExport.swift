@@ -60,7 +60,9 @@ enum FileExport {
                     throw failure("“\(source.lastPathComponent)” is no longer in \(source.deletingLastPathComponent().path).")
                 }
                 let url = dir.appendingPathComponent(job.names[i])
-                if job.format != .original, i < job.convert.count, job.convert[i] {
+                // Same format at full size is just a rename: copy, don't re-encode (and lose quality).
+                let sameFormat = ExportFormat.of(extension: source.pathExtension) == job.format && job.scale == 1
+                if job.format != .original, i < job.convert.count, job.convert[i], !sameFormat {
                     try convertImage(at: source, to: job.format, quality: job.quality, scale: job.scale).write(to: url)
                 } else {
                     try fm.copyItem(at: source, to: url)   // a clone on APFS: instant, no extra space

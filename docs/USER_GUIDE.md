@@ -27,12 +27,12 @@ These work while the shelf is open.
 | ← → | Previous / next card |
 | ⌘← ⌘→ | First / last card |
 | ↑ ↓ | Show only text, links, images or files, then everything again |
-| Return or double-click | Paste (with formatting, or as plain text in apps you've set to plain text) |
-| ⇧Return | Paste the other way: plain text instead of formatted, or the reverse |
+| Return or double-click | Paste (with formatting, or as plain text in apps you've set to plain text). On an image or file, a small box opens first (see below) |
+| ⇧Return | Paste the other way: plain text instead of formatted, or the reverse. On an image or file: paste it as it is |
 | ⌘K | Paste As: every way to paste this card (see below) |
 | ⌘1 … ⌘9 | Paste card 1–9 directly (add ⇧ for the other way) |
 | ⌘C | Copy the card to the clipboard without pasting |
-| ⌘R | Copy as File: choose a file name and format (see below) |
+| ⌘R | Copy as File: the same box, for any card (see below) |
 | Space | Open the full preview (when the search field is empty) |
 | ⌘E | Edit the card before pasting |
 | ⌘P | Pin or unpin |
@@ -78,27 +78,35 @@ shown next to one, or click it. The card itself stays as it was.
 
 Every card also has **Copy as File…** (E).
 
-## Copy as File (⌘R)
+## Rename, resize or convert before pasting
 
-Turns a card into a real file with the name and format you choose: rename a screenshot before
-sending it, convert a HEIC photo to JPEG, or turn a snippet into `notes.md`.
+Press **Return** on an image or file card and a small box opens just above it:
 
-1. Select a card and press **⌘R** (or right-click → **Copy as File…**, or ⌘K then E).
-2. Type a **name**. The extension follows the format, so you don't need to type it.
-3. Pick a **format**:
-   - Images, and image files such as HEIC or PNG photos: PNG, JPEG, HEIC, TIFF, GIF or PDF. For JPEG
-     and HEIC, set the **quality**; for any image, the **size** (75%, 50%, 25%). The form shows the
-     result, such as "1440 × 900 · 312 KB", so you can see the size before you send it.
-   - Text: Plain Text, Markdown, Rich Text (RTF), Word Document or Web Page (HTML). With Plain Text
-     you can type any extension, such as `deploy.sh` or `data.csv`.
-   - Other files keep their format and are renamed. With several files, the name you type is numbered
-     ("Trip 1.jpg", "Trip 2.jpg"); leave it empty to keep their names.
-4. Press **Return** to paste the file into the app you were in (a Finder window, Mail, Slack, Messages…),
-   **⌘C** to copy it, or **⌘S** to save it somewhere. **Esc** goes back.
+- **Name:** type a new name. The extension follows the format, so you don't need to type it.
+- **Format** (the menu next to the name): PNG, JPEG, HEIC, TIFF, GIF or PDF for images and image
+  files; Plain Text, Markdown, Rich Text (RTF), Word or HTML for text. Other files keep their format and
+  are renamed. With several files, the name you type is numbered ("Trip 1.jpg", "Trip 2.jpg"); leave
+  it empty to keep their names.
+- **Size:** Original, 75%, 50% or 25%, and **Quality** for JPEG and HEIC.
+- Under them, the result, such as "invoice.jpg · 861 × 539 · 180 KB", next to what the card is now,
+  so you can see the size before you send it.
+
+Then **Return** pastes it into the app you were in (a Finder window, Mail, Slack, Messages…), **⌘C**
+copies it, **⌘S** saves it somewhere, and **Esc** goes back. If you changed nothing, Return pastes the
+card exactly as before, so **Return, Return** is a normal paste. **⇧Return** pastes the original
+straight away, in the shelf or in the box.
+
+**⌘R** (or right-click → **Copy as File…**, or ⌘K then E) opens the same box for any card, text
+included: turn a snippet into `notes.md` or a Word document. With Plain Text you can type any
+extension, such as `deploy.sh` or `data.csv`.
+
+Don't want the box on Return? Turn off **Ask Before Pasting Images and Files** in the Shelf menu; ⌘R
+still opens it.
 
 Converting re-encodes the picture: its orientation is kept, other details such as where a photo was
-taken are left out. The files are made in Shelf's own folder and deleted after a day; the app you paste
-them into keeps its own copy. Shelf remembers the format and quality you used last.
+taken are left out. Renaming a JPEG or HEIC without resizing copies it unchanged. The files are made in
+Shelf's own folder and deleted after a day; the app you paste them into keeps its own copy. Shelf
+remembers the quality you used last.
 
 ## Finding things
 
@@ -163,6 +171,7 @@ hides menu bar icons that don't fit, and Shelf's may be one of them.
 
 - **Pause Capture:** stop recording copies (and screenshots) until you turn it back on.
 - **Add Screenshots:** put new screenshots in the shelf (on unless you turn it off).
+- **Ask Before Pasting Images and Files:** Return opens the rename/resize/convert box first (on).
 - **Paste Style:** what Return pastes by default (With Formatting or Plain Text), and the apps you've
   set differently; click one to make it follow the default again.
 - **Launch at Login:** start Shelf automatically.

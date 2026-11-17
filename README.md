@@ -56,10 +56,10 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 | type | Search: text, links, file names, source app, and text inside screenshots |
 | ← → (⌘← ⌘→) | Move selection (jump to ends) |
 | ↑ ↓ | Show only text, links, images or files (or click the icons next to search) |
-| Return / double-click | Paste: with formatting, or as plain text in apps you set that way |
-| ⇧Return | Paste the other way (plain text ↔ with formatting) |
+| Return / double-click | Paste: with formatting, or as plain text in apps you set that way. On an image or file, a small box opens first to rename, resize or convert it; Return again pastes |
+| ⇧Return | Paste the other way (plain text ↔ with formatting); on an image or file, paste it as it is, skipping the box |
 | ⌘K | **Paste As:** formatted, plain text, Markdown, UPPERCASE / lowercase / Capitalized, trimmed, joined lines, formatted JSON, link without tracking, text in an image, file paths or names |
-| ⌘R | **Copy as File:** name it and pick a format (PNG, JPEG, HEIC, TIFF, GIF, PDF · Plain Text, Markdown, RTF, Word, HTML), then paste, copy (⌘C) or save (⌘S) it |
+| ⌘R | **Copy as File:** the same box for any card: name it and pick a format (PNG, JPEG, HEIC, TIFF, GIF, PDF · Plain Text, Markdown, RTF, Word, HTML), then paste (Return), copy (⌘C) or save (⌘S) it |
 | ⌘1 … ⌘9 (⇧ for the other way) | Paste item 1–9 (hold ⌘ to see the numbers and every ⌘ shortcut) |
 | drag a card | Drop it into another app (images become a named PNG file) |
 | Space | Full preview (when the search field is empty); files open in Quick Look |

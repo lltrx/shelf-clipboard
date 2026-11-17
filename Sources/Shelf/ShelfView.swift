@@ -6,6 +6,7 @@ protocol ShelfActions: AnyObject {
     func imageURL(_ item: ClipItem) -> URL?
     func attributed(_ item: ClipItem) -> NSAttributedString
     func paste(_ item: ClipItem, plain: Bool)
+    func pasteFromCard(_ item: ClipItem)
     func pasteAs(_ item: ClipItem, _ option: PasteOption)
     func copy(_ item: ClipItem)
     func delete(_ item: ClipItem)
@@ -48,6 +49,9 @@ final class ShelfModel: ObservableObject {
     @Published var target: TargetApp?           // the app the shelf pastes into
     @Published var plainEverywhere = false      // Paste as Plain Text by Default
     @Published var appStyles: [String: Bool] = [:]   // bundle id → Return pastes plain text (true) or formatted there
+    @Published var askBeforePasting = true      // Return on an image or file opens the paste box first
+    @Published var popoverArrowX: CGFloat = 200 // where the paste box's arrow points, in the box
+    var selectedCardMidX: CGFloat?              // the selected card's center in the shelf, for the paste box
 
     struct TargetApp: Equatable {
         let bundle: String
@@ -252,14 +256,18 @@ struct ShelfView: View {
         guard let item = model.selected else { return [Hint("⇥", "Next tab"), Hint("↑↓", "Filter")] }
         if item.concealed { return [Hint("↩", "Paste password")] }
         var hints: [Hint] = []
+        let isFileLike = item.kind == .image || item.kind == .file
         if item.formatted {
             hints.append(Hint("↩", model.plainByDefault ? "Paste as plain text" : "Paste with formatting"))
             hints.append(Hint("⇧↩", model.plainByDefault ? "With formatting" : "As plain text"))
+        } else if isFileLike && model.askBeforePasting {
+            hints.append(Hint("↩", "Paste…"))
+            hints.append(Hint("⇧↩", "Paste original"))
         } else {
             hints.append(Hint("↩", "Paste"))
         }
         hints.append(Hint("⌘K", "Paste As…"))
-        if item.kind == .image || item.kind == .file { hints.append(Hint("⌘R", "Copy as File…")) }
+        if isFileLike && !model.askBeforePasting { hints.append(Hint("⌘R", "Copy as File…")) }
         if model.query.isEmpty { hints.append(Hint("Space", "Preview")) }
         hints.append(Hint("↑↓", "Filter"))
         hints.append(Hint("⌘", "Hold for more"))
@@ -341,7 +349,22 @@ struct ShelfView: View {
                                  stackPosition: model.stack.firstIndex(of: item.id).map { $0 + 1 },
                                  shortcut: model.commandHeld && index < 9 ? index + 1 : nil,
                                  imageURL: model.actions?.imageURL(item))
-                            .onTapGesture(count: 2) { model.actions?.paste(item, plain: model.plainByDefault) }
+                            .background {
+                                if index == model.selection {
+                                    GeometryReader { geo in
+                                        Color.clear
+                                            .onAppear { model.selectedCardMidX = geo.frame(in: .global).midX }
+                                            .onChange(of: geo.frame(in: .global).midX) {
+                                                model.selectedCardMidX = geo.frame(in: .global).midX
+                                            }
+                                    }
+                                }
+                            }
+                            .onTapGesture(count: 2) {
+                                model.selection = index
+                                // Next turn of the run loop, once the card's position is known.
+                                DispatchQueue.main.async { model.actions?.pasteFromCard(item) }
+                            }
                             .onTapGesture { model.selection = index }
                             .contextMenu { menu(item, index) }
                             .dragOut(item.draggable) { model.actions?.dragItem(item) ?? NSItemProvider() }
@@ -715,11 +738,7 @@ struct PreviewView: View {
     @ObservedObject var model: ShelfModel
 
     var body: some View {
-        if model.exportDraft != nil {
-            ExportView(model: model)
-        } else {
-            preview
-        }
+        preview
     }
 
     private var preview: some View {

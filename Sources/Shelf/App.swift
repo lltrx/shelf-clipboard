@@ -30,6 +30,11 @@ final class ShelfPanel: NSPanel {
         onResignKey()
     }
 
+    /// SwiftUI content that draws its own shape and background (the paste box with its arrow).
+    func hostPlain<V: View>(_ view: V) {
+        contentView = NSHostingView(rootView: view)
+    }
+
     /// Frosted, rounded content with a SwiftUI view inside.
     func host<V: View>(_ view: V) {
         let effect = NSVisualEffectView()
@@ -65,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     private let model = ShelfModel()
     private let panel = ShelfPanel()
     private let preview = ShelfPanel()
+    private let popover = ShelfPanel()   // the paste box, just above the selected card
     private var hotKey: HotKey?
     private var statusItem: NSStatusItem!
     private var keyMonitor: Any?
@@ -95,6 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         }
         model.actions = self
         model.plainEverywhere = UserDefaults.standard.bool(forKey: "pastePlainByDefault")
+        model.askBeforePasting = UserDefaults.standard.object(forKey: "askBeforePasting") as? Bool ?? true
         model.appStyles = appStyles
 
         setUpPanels()
@@ -130,15 +137,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         panel.host(ShelfView(model: model))
         preview.host(PreviewView(model: model))
         preview.allowsKey = false
+        popover.hostPlain(ExportView(model: model))
+        popover.allowsKey = false
 
-        // Hide only when focus leaves both panels (moving into the editor is fine).
+        // Hide only when focus leaves all the panels (moving into the editor or the paste box is fine).
         let focusCheck = { [unowned self] in
             DispatchQueue.main.async { [self] in
-                if shelfOpen && !panel.isKeyWindow && !preview.isKeyWindow { hide() }
+                if shelfOpen && !panel.isKeyWindow && !preview.isKeyWindow && !popover.isKeyWindow { hide() }
             }
         }
         panel.onResignKey = focusCheck
         preview.onResignKey = focusCheck
+        popover.onResignKey = focusCheck
         // Clicking back into the shelf ends editing, or closes the Copy as File form.
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: panel, queue: .main) { [unowned self] _ in
             if model.editing { endEditing() }
@@ -146,10 +156,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         }
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [unowned self] event in
-            if event.window === preview {
-                let handled = model.exportDraft != nil ? handleExportKey(event) : handleEditorKey(event)
-                return handled ? nil : event
-            }
+            if event.window === popover { return handleExportKey(event) ? nil : event }
+            if event.window === preview { return handleEditorKey(event) ? nil : event }
             guard event.window === panel else { return event }
             guard shelfOpen else { return nil }    // fading out: nothing more to do in it
             return handleKey(event) ? nil : event
@@ -203,8 +211,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         case 36, 76:                                                        // return (⇧ flips plain, ⌥ stack as one)
             if !model.stack.isEmpty {
                 e.modifierFlags.contains(.option) ? pasteStackJoined() : startStack(plain: plain)
-            } else {
-                model.selected.map { paste($0, plain: plain) }
+            } else if let item = model.selected {
+                shift ? paste(item, plain: plain) : pasteFromCard(item)   // ⇧: images and files as they are
             }
             return true
         case 48: model.cycleTab(shift ? -1 : 1); return true                // tab
@@ -250,12 +258,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         }
     }
 
-    /// Keys in the Copy as File form. Everything else goes to the name field and the controls.
+    /// Keys in the paste box. Everything else goes to the name field and the menus.
     private func handleExportKey(_ e: NSEvent) -> Bool {
         let cmd = e.modifierFlags.contains(.command)
         switch e.keyCode {
         case 53: cancelExport(); return true                                // esc
-        case 36, 76: finishExport(.paste); return true                      // return
+        case 36, 76:                                                        // return
+            if e.isARepeat { return true }   // Return held down: the repeat isn't a second Return
+            if e.modifierFlags.contains(.shift), let draft = model.exportDraft, draft.source != .text {
+                paste(draft.item, plain: false)                             // ⇧Return: the original
+            } else {
+                finishExport(.paste)
+            }
+            return true
         case 8 where cmd: finishExport(.copy); return true                  // ⌘C
         case 1 where cmd: finishExport(.save); return true                  // ⌘S
         default: return false
@@ -323,6 +338,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         model.commandHeld = false
         preview.allowsKey = false
         preview.orderOut(nil)
+        popover.allowsKey = false
+        popover.orderOut(nil)
         panelAnimation += 1
         let generation = panelAnimation
         guard animated, panel.isVisible else {
@@ -679,7 +696,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     /// Files made by Copy as File and by dragging images out. Deleted after a day.
     private var exportsDir: URL { store.dir.appendingPathComponent("Exports", isDirectory: true) }
 
-    /// ⌘R: opens the Copy as File form above the shelf, with a name and format to start from.
+    /// Return or double-click on a card: images and files open the paste box first (rename, resize,
+    /// convert), unless that's turned off; everything else pastes.
+    func pasteFromCard(_ item: ClipItem) {
+        if model.askBeforePasting, !item.concealed, item.kind == .image || item.kind == .file {
+            startExport(item)
+        } else {
+            paste(item, plain: model.plainByDefault)
+        }
+    }
+
+    /// Opens the paste box above the selected card (Return on an image or file, ⌘R on any card). It
+    /// starts from the card as it is, so Return without changes pastes the original.
     func startExport(_ item: ClipItem) {
         guard !item.concealed else { return }
         endEditing()
@@ -688,11 +716,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         switch item.kind {
         case .image:
             let name = ExportNaming.timestampName("Image", item.created)
-            let formats = FileExport.writableImageFormats
-            let saved = ExportFormat(rawValue: defaults.string(forKey: "exportImageFormat") ?? "")
             draft = ExportDraft(item: item, source: .image, originals: [name + ".png"], convertible: [true],
-                                formats: formats, name: name,
-                                format: saved.flatMap { formats.contains($0) ? $0 : nil } ?? .png)
+                                formats: FileExport.writableImageFormats, name: name, format: .png)
         case .text, .link:
             let name = ExportNaming.suggestedName(forText: item.text ?? "") ?? ExportNaming.timestampName("Text", item.created)
             let saved = ExportFormat(rawValue: defaults.string(forKey: "exportTextFormat") ?? "")
@@ -704,35 +729,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             let names = paths.map { ($0 as NSString).lastPathComponent }
             let convertible = paths.map(FileExport.isImage)
             let imageFormats = convertible.contains(true) ? FileExport.writableImageFormats : []
+            // One image file in a format Shelf writes starts in that format, so Size works right
+            // away; anything else starts as Keep Format.
+            let own = paths.count == 1 && convertible[0]
+                ? ExportFormat.of(extension: (paths[0] as NSString).pathExtension).flatMap { imageFormats.contains($0) ? $0 : nil }
+                : nil
             draft = ExportDraft(item: item, source: .files, originals: names, convertible: convertible,
-                                formats: [ExportFormat.original] + imageFormats,
+                                formats: own == nil ? [ExportFormat.original] + imageFormats : imageFormats,
                                 name: names.count == 1 ? ExportNaming.splitExtension(names[0]).stem : "",
-                                format: .original)
+                                format: own ?? .original)
         }
+        draft.startName = draft.name
+        draft.startFormat = draft.format
         if defaults.object(forKey: "exportQuality") != nil {
-            draft.quality = min(max(defaults.double(forKey: "exportQuality"), 0.1), 1)
+            draft.quality = ExportDraft.nearestQuality(defaults.double(forKey: "exportQuality"))
         }
         model.exportDraft = draft
         showExportForm()
     }
 
+    /// The paste box sits just above the shelf, its arrow pointing at the selected card.
     private func showExportForm() {
-        guard let vf = panel.screen?.visibleFrame else { return }
-        let width = min(720, vf.width * 0.7)
-        let height = min(320, max(240, vf.maxY - panel.frame.maxY - 24))
-        // Resizes from the preview when it was open, fades in when it wasn't.
-        place(preview, NSRect(x: vf.midX - width / 2, y: panel.frame.maxY + 12, width: width, height: height), animate: true)
-        preview.allowsKey = true
-        fadeIn(preview)
-        preview.makeKey()
+        guard let draft = model.exportDraft, let vf = panel.screen?.visibleFrame else { return }
+        let width: CGFloat = 400
+        let cardX = panel.frame.minX + (model.selectedCardMidX ?? panel.frame.width / 2)
+        let x = min(max(cardX - width / 2, vf.minX + 8), vf.maxX - width - 8)
+        model.popoverArrowX = cardX - x
+        popover.setFrame(NSRect(x: x, y: panel.frame.maxY - 4, width: width, height: CGFloat(draft.popoverHeight)), display: true)
+        popover.allowsKey = true
+        fadeIn(popover)
+        popover.makeKey()
     }
 
-    /// Esc, Cancel, or clicking back into the shelf: back to the cards (and the preview, if it was open).
+    /// Esc, or clicking back into the shelf: closes the paste box.
     func cancelExport() {
         guard model.exportDraft != nil else { return }
         model.exportDraft = nil
-        preview.allowsKey = false
-        if model.previewing { placePreview(animate: true) } else { preview.orderOut(nil) }
+        popover.allowsKey = false
+        popover.orderOut(nil)
         if panel.isVisible { panel.makeKey() }
     }
 
@@ -740,6 +774,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     /// pastes, copies or saves them.
     func finishExport(_ action: ExportAction) {
         guard var draft = model.exportDraft, !draft.busy else { return }
+        if draft.pastesOriginal && action != .save {   // nothing changed: the card itself, as before
+            action == .paste ? paste(draft.item, plain: false) : copy(draft.item)
+            return
+        }
         let content: FileExport.Job.Content
         switch draft.source {
         case .text:
@@ -865,14 +903,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         return NSAttributedString(string: item.text ?? "", attributes: [.font: font, .foregroundColor: NSColor.black])
     }
 
-    /// The next form starts with the format and quality used last.
+    /// The next box starts with the quality (and, for text, the format) used last.
     private func rememberExportChoices(_ draft: ExportDraft) {
         let defaults = UserDefaults.standard
-        switch draft.source {
-        case .image: defaults.set(draft.format.rawValue, forKey: "exportImageFormat")
-        case .text: defaults.set(draft.format.rawValue, forKey: "exportTextFormat")
-        case .files: break
-        }
+        if draft.source == .text { defaults.set(draft.format.rawValue, forKey: "exportTextFormat") }
         if draft.format.isLossy { defaults.set(draft.quality, forKey: "exportQuality") }
     }
 
@@ -1032,6 +1066,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         let shots = menu.addItem(withTitle: "Add Screenshots", action: #selector(toggleScreenshots), keyEquivalent: "")
         shots.state = addScreenshots ? .on : .off
         shots.toolTip = "Screenshots saved as files (⇧⌘3, ⇧⌘4, ⇧⌘5) appear in the shelf, ready to paste"
+        let ask = menu.addItem(withTitle: "Ask Before Pasting Images and Files", action: #selector(toggleAskBeforePasting), keyEquivalent: "")
+        ask.state = model.askBeforePasting ? .on : .off
+        ask.toolTip = "Return opens a small box to rename, resize or convert first; ⇧Return pastes right away"
         let style = menu.addItem(withTitle: "Paste Style", action: nil, keyEquivalent: "")
         menu.setSubmenu(pasteStyleMenu(), for: style)
         let ignored = menu.addItem(withTitle: "Ignored Apps", action: nil, keyEquivalent: "")
@@ -1077,6 +1114,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     @objc private func togglePause() { monitor.paused.toggle() }
 
     @objc private func toggleScreenshots() { addScreenshots.toggle() }
+
+    @objc private func toggleAskBeforePasting() {
+        model.askBeforePasting.toggle()
+        UserDefaults.standard.set(model.askBeforePasting, forKey: "askBeforePasting")
+    }
 
     // MARK: - Screenshots
 

@@ -43,6 +43,18 @@ enum ExportFormat: String, CaseIterable, Identifiable {
 
     static let image: [ExportFormat] = [.png, .jpeg, .heic, .tiff, .gif, .pdf]
     static let text: [ExportFormat] = [.txt, .md, .rtf, .docx, .html]
+
+    /// The image format a file already has, from its extension, if Shelf can write it.
+    static func of(extension ext: String) -> ExportFormat? {
+        switch ext.lowercased() {
+        case "png": return .png
+        case "jpg", "jpeg": return .jpeg
+        case "heic", "heif": return .heic
+        case "tif", "tiff": return .tiff
+        case "gif": return .gif
+        default: return nil
+        }
+    }
 }
 
 enum ExportNaming {
@@ -173,10 +185,35 @@ struct ExportDraft: Equatable {
     let formats: [ExportFormat]   // choices in the Format menu
     var name: String
     var format: ExportFormat
-    var quality = 0.85            // JPEG and HEIC
+    var quality = 0.8             // JPEG and HEIC: one of `qualities`
     var scale = 1.0               // images: 1, 0.75, 0.5 or 0.25 of the original size
     var busy = false
     var error: String?
+    var startName: String?        // what the box opened with, to tell whether anything changed
+    var startFormat: ExportFormat?
+
+    static let qualities: [Double] = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
+    static let scales: [Double] = [1, 0.75, 0.5, 0.25]
+
+    /// The quality step nearest to `value` (a remembered quality may be between steps).
+    static func nearestQuality(_ value: Double) -> Double {
+        qualities.min { abs($0 - value) < abs($1 - value) } ?? 0.8
+    }
+
+    /// Images among the sources, so Size (and Quality) apply.
+    var hasImages: Bool { source != .text && convertible.contains(true) }
+
+    /// Nothing changed since the box opened.
+    var isUnchanged: Bool {
+        name == (startName ?? name) && format == (startFormat ?? format) && scale == 1
+    }
+
+    /// Return pastes the card as it is: an image or file nobody renamed, resized or converted.
+    /// (Text opened with ⌘R always becomes a file: that's what ⌘R asked for.)
+    var pastesOriginal: Bool { source != .text && isUnchanged }
+
+    /// Height of the paste box in points, its arrow included: Size takes a row when there are images.
+    var popoverHeight: Double { hasImages ? 193 : 156 }
 
     var fileNames: [String] {
         ExportNaming.names(typed: name, originals: originals,
