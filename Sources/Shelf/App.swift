@@ -173,10 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [unowned self] event in
             if event.window === popover { return handleExportKey(event) ? nil : event }
-            if event.window === settingsWindow, event.keyCode == 13, event.modifierFlags.contains(.command) {
-                settingsWindow?.performClose(nil)   // ⌘W (Shelf has no menu bar of its own to do it)
-                return nil
-            }
+            if let window = settingsWindow, event.window === window { return handleSettingsKey(event) ? nil : event }
             if event.window === preview { return handleEditorKey(event) ? nil : event }
             guard event.window === panel else { return event }
             guard shelfOpen else { return nil }    // fading out: nothing more to do in it
@@ -341,6 +338,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         default: break
         }
         return true
+    }
+
+    /// Keys in Settings: all of them while a shortcut is being recorded, and ⌘W (Shelf has no menu
+    /// bar of its own to close windows with).
+    private func handleSettingsKey(_ e: NSEvent) -> Bool {
+        let flags = e.modifierFlags
+        if settings.recording != nil {
+            let usable = settings.record(keyCode: e.keyCode, command: flags.contains(.command), option: flags.contains(.option),
+                                         shift: flags.contains(.shift), control: flags.contains(.control))
+            if !usable { NSSound.beep() }
+            return true
+        }
+        if e.keyCode == 13, flags.contains(.command) {
+            settingsWindow?.performClose(nil)
+            return true
+        }
+        return false
     }
 
     private func toggle() {
@@ -1256,8 +1270,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
                 // Then step aside, so the app you were in is frontmost again and ⇧⌘V pastes there.
                 DispatchQueue.main.async { NSApp.hide(nil) }
             }
+            // Switching to another app mid-recording would otherwise leave the shortcuts off.
+            NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: window,
+                                                   queue: .main) { [weak self] _ in
+                self?.settings.stopRecording()
+            }
             settingsWindow = window
         }
+        if NSApp.isHidden { NSApp.unhide(nil) }   // closing Settings (or Save…) hid Shelf
         NSApp.activate()
         settingsWindow?.makeKeyAndOrderFront(nil)
     }
@@ -1450,10 +1470,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         ignoredApps.append(bundle)
     }
 
-    static func appName(_ bundle: String) -> String {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { return bundle }
-        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
-    }
+    static func appName(_ bundle: String) -> String { AppName.of(bundle) }
 
     @objc private func openAccessibility() {
         _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)

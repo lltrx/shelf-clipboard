@@ -38,7 +38,7 @@ final class ImageEditTests: XCTestCase {
         c.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         let bytes = try XCTUnwrap(c.data).assumingMemoryBound(to: UInt8.self)
         let i = y * c.bytesPerRow + x * 4   // the buffer's first row is the top one
-        return (Int(bytes[i]), Int(bytes[i + 1]), Int(bytes[i + 2]))
+        return withExtendedLifetime(c) { (Int(bytes[i]), Int(bytes[i + 1]), Int(bytes[i + 2])) }
     }
 
     func testCropKeepsTheAreaMeasuredFromTheTop() throws {

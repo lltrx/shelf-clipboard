@@ -4,6 +4,14 @@ import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// An app's name from its bundle id ("Slack" for com.tinyspeck.slackmacgap), or the id if it isn't installed.
+enum AppName {
+    static func of(_ bundle: String) -> String {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else { return bundle }
+        return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+    }
+}
+
 /// What Settings needs from the app.
 protocol SettingsActions: AnyObject {
     /// Registers the shortcuts saved in Settings and says which ones worked (another app may
@@ -16,7 +24,8 @@ protocol SettingsActions: AnyObject {
 }
 
 /// The Settings window's state. Values live in UserDefaults (the same keys the app reads), so the
-/// window always shows what's in effect, even if a menu changed it meanwhile.
+/// window always shows what's in effect, even if a menu changed it meanwhile. It uses no AppKit
+/// windows or events itself: the app's key monitor hands it the keys while a shortcut is recorded.
 final class SettingsModel: ObservableObject {
     enum Shortcut { case open, previous }
 
@@ -25,7 +34,6 @@ final class SettingsModel: ObservableObject {
     @Published var shortcutMessage: String?
     @Published var loginMessage: String?
     private let defaults = UserDefaults.standard
-    private var keyMonitor: Any?
     private var observer: Any?
 
     static let defaultOpen = "cmd+shift+v"
@@ -69,46 +77,36 @@ final class SettingsModel: ObservableObject {
         recording = shortcut
         shortcutMessage = "Press the new shortcut, or Esc to keep the old one."
         actions?.pauseShortcuts()
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, let shortcut = self.recording else { return event }
-            self.record(event, for: shortcut)
-            return nil
-        }
     }
 
+    /// Esc, clicking the button again, closing Settings or switching away: the shortcuts as they were.
     func stopRecording() {
-        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-        keyMonitor = nil
         guard recording != nil else { return }
         recording = nil
         shortcutMessage = nil
         _ = actions?.applyShortcuts()
     }
 
-    private func record(_ event: NSEvent, for shortcut: Shortcut) {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if event.keyCode == 53 { stopRecording(); return }                                    // esc
-        if (event.keyCode == 51 || event.keyCode == 117), flags.intersection([.command, .option, .control]).isEmpty {
-            stopRecording()                                                                   // ⌫
+    /// A key pressed while recording. False when it can't be used (the app beeps).
+    func record(keyCode: UInt16, command: Bool, option: Bool, shift: Bool, control: Bool) -> Bool {
+        guard let shortcut = recording else { return true }
+        if keyCode == 53 { stopRecording(); return true }                                    // esc
+        if keyCode == 51 || keyCode == 117, !command, !option, !control {                    // ⌫
+            stopRecording()
             if shortcut == .previous { turnOffPrevious() } else { reset(.open) }
-            return
+            return true
         }
-        guard let new = ShortcutSpec(keyCode: event.keyCode, command: flags.contains(.command), option: flags.contains(.option),
-                                     shift: flags.contains(.shift), control: flags.contains(.control)) else {
-            NSSound.beep()
+        guard let new = ShortcutSpec(keyCode: keyCode, command: command, option: option, shift: shift, control: control) else {
             shortcutMessage = "Use ⌘, ⌥ or ⌃ with a letter, a number or Space."
-            return
+            return false
         }
         let other: Shortcut = shortcut == .open ? .previous : .open
         if spec(other) == new {
-            NSSound.beep()
             shortcutMessage = "\(new.display) is already \(other == .open ? "Open Shelf" : "Paste Previous Copy")."
-            return
+            return false
         }
         let old = defaults.string(forKey: key(shortcut))
         defaults.set(new.spec, forKey: key(shortcut))
-        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-        keyMonitor = nil
         recording = nil
         let worked = actions?.applyShortcuts() ?? (open: true, previous: true)
         if !(shortcut == .open ? worked.open : worked.previous) {
@@ -118,6 +116,7 @@ final class SettingsModel: ObservableObject {
         } else {
             shortcutMessage = nil
         }
+        return true
     }
 
     func reset(_ shortcut: Shortcut) {
@@ -157,7 +156,7 @@ final class SettingsModel: ObservableObject {
     /// The apps whose paste style isn't the default.
     var appStyles: [AppStyle] {
         let styles = defaults.dictionary(forKey: "pasteStyleByApp") as? [String: Bool] ?? [:]
-        return styles.map { AppStyle(bundle: $0.key, name: AppDelegate.appName($0.key), plain: $0.value) }
+        return styles.map { AppStyle(bundle: $0.key, name: AppName.of($0.key), plain: $0.value) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
@@ -184,34 +183,25 @@ final class SettingsModel: ObservableObject {
         set { set(newValue, "addScreenshots") }
     }
 
-    struct App: Identifiable {
+    struct IgnoredApp: Identifiable {
         let bundle: String
         let name: String
         var id: String { bundle }
     }
 
-    var ignoredApps: [App] {
-        (defaults.stringArray(forKey: "ignoredApps") ?? []).map { App(bundle: $0, name: AppDelegate.appName($0)) }
+    var ignoredApps: [IgnoredApp] {
+        (defaults.stringArray(forKey: "ignoredApps") ?? []).map { IgnoredApp(bundle: $0, name: AppName.of($0)) }
     }
 
     func stopIgnoring(_ bundle: String) {
         set((defaults.stringArray(forKey: "ignoredApps") ?? []).filter { $0 != bundle }, "ignoredApps")
     }
 
-    func addIgnoredApp(in window: NSWindow?) {
-        let open = NSOpenPanel()
-        open.allowedContentTypes = [.application]
-        open.directoryURL = URL(fileURLWithPath: "/Applications")
-        open.prompt = "Ignore"
-        open.message = "Shelf won't record anything copied in this app."
-        let add: (NSApplication.ModalResponse) -> Void = { [weak self] response in
-            guard let self, response == .OK, let url = open.url, let bundle = Bundle(url: url)?.bundleIdentifier else { return }
-            var apps = self.defaults.stringArray(forKey: "ignoredApps") ?? []
-            guard !apps.contains(bundle) else { return }
-            apps.append(bundle)
-            self.set(apps, "ignoredApps")
-        }
-        if let window { open.beginSheetModal(for: window, completionHandler: add) } else { add(open.runModal()) }
+    func ignore(_ bundle: String) {
+        var apps = defaults.stringArray(forKey: "ignoredApps") ?? []
+        guard !apps.contains(bundle) else { return }
+        apps.append(bundle)
+        set(apps, "ignoredApps")
     }
 
     // MARK: General
@@ -310,7 +300,16 @@ struct SettingsView: View {
                         removeButton("Record copies from \(app.name) again") { settings.stopIgnoring(app.bundle) }
                     }
                 }
-                Button("Add App…") { settings.addIgnoredApp(in: NSApp.keyWindow) }
+                Button("Add App…") {
+                    let open = NSOpenPanel()
+                    open.allowedContentTypes = [.application]
+                    open.directoryURL = URL(fileURLWithPath: "/Applications")
+                    open.prompt = "Ignore"
+                    open.message = "Shelf won't record anything copied in this app."
+                    if open.runModal() == .OK, let url = open.url, let bundle = Bundle(url: url)?.bundleIdentifier {
+                        settings.ignore(bundle)
+                    }
+                }
             } header: {
                 Text("Ignored apps")
             } footer: {
