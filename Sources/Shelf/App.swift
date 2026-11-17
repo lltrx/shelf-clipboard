@@ -59,7 +59,10 @@ final class ShelfPanel: NSPanel {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfActions {
-    private let retentionDays = 30
+    /// Unpinned history is kept this many days (0: forever). Settings → History.
+    private var historyDays: Int { UserDefaults.standard.object(forKey: "historyDays") as? Int ?? 30 }
+    /// Secrets (keys, tokens, passwords) are deleted after this many minutes (0: kept like any card).
+    private var secretMinutes: Double { UserDefaults.standard.object(forKey: "secretMinutes") as? Double ?? 5 }
     private let panelHeight: CGFloat = 312
     /// Tags ⌘V events Shelf posts itself, so the paste stack does not count them as yours.
     private static let syntheticMarker: Int64 = 0x5348_4C46
@@ -79,6 +82,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     private var panelAnimation = 0                 // bumped by show/hide, so a finished fade-out can't hide a reopened shelf
     private var commandHold: DispatchWorkItem?   // shows the ⌘ shortcuts once ⌘ has been held a moment
     private var pruneTimer: Timer?
+    private var expiryTimer: Timer?
+    private var undoGroups: [[ItemSnapshot]] = []   // deleted cards, newest group last, for ⌘Z
 
     private let ocrQueue = DispatchQueue(label: "shelf.ocr", qos: .utility)
     private var ocrRunning = false
@@ -113,7 +118,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         monitor.onCapture = { [unowned self] capture in
             if stackActive { endStack() } // you copied something new; the stack is over
             model.password = nil
-            store.upsert(capture)
+            let id = store.upsert(capture)
+            if let id, secretMinutes > 0, capture.kind == .text || capture.kind == .link,
+               let text = capture.text, SecretScanner.kind(of: text) != nil {
+                store.setExpiry(id, Date().addingTimeInterval(secretMinutes * 60))
+            }
             reload()
             if capture.kind == .image { runOCR() }
         }
@@ -128,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
         prune()
         pruneTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in self?.prune() }
+        expiryTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.expireSecrets() }
         runOCR()
     }
 
@@ -198,14 +208,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         if !cmd && model.commandHeld { commandChanged(false) }           // missed ⌘'s release (e.g. in a menu)
 
         if model.naming != nil {                                         // typing a pinboard name
-            if e.keyCode == 53 { model.naming = nil; model.pendingPin = nil; return true }
+            if e.keyCode == 53 { model.naming = nil; model.pendingPins = []; return true }
             return false
         }
 
         switch e.keyCode {
         case 53: model.previewing ? togglePreview() : hide(); return true   // esc
-        case 123: model.move(cmd ? -1_000_000 : -1); return true            // ←
-        case 124: model.move(cmd ? 1_000_000 : 1); return true              // →
+        case 123: shift && !cmd ? extendMarks(-1) : model.move(cmd ? -1_000_000 : -1); return true   // ← (⇧ marks)
+        case 124: shift && !cmd ? extendMarks(1) : model.move(cmd ? 1_000_000 : 1); return true      // → (⇧ marks)
         case 125 where !cmd: model.cycleKind(1); return true                // ↓ next kind: Text, Links…
         case 126 where !cmd: model.cycleKind(-1); return true               // ↑
         case 36, 76:                                                        // return (⇧ flips plain, ⌥ stack as one)
@@ -217,7 +227,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             return true
         case 48: model.cycleTab(shift ? -1 : 1); return true                // tab
         case 49 where !cmd && model.query.isEmpty: togglePreview(); return true // space
-        case 51 where cmd: model.selected.map(delete); return true          // ⌘⌫
+        case 51 where cmd:                                                  // ⌘⌫: the marked cards, else this one
+            if model.stack.isEmpty {
+                model.selected.map(delete)
+            } else {
+                deleteItems(model.stack.compactMap { id in model.items.first { $0.id == id } })
+            }
+            return true
         default: break
         }
 
@@ -226,6 +242,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         guard cmd else { return false }
         switch e.keyCode {
         case 35: requestPin(); return true                                  // P
+        case 6 where model.query.isEmpty && !shift: undoDelete(); return true   // Z: undo delete
+        case 38: joinMarked(); return true                                  // J: join the marked cards
         case 15: model.selected.map(startExport); return true               // R: Copy as File… ("rename")
         case 8 where shift: model.selected.map(startExport); return true    // ⇧C: the same, as in betas 1–3
         case 8 where model.query.isEmpty: model.selected.map(copy); return true // C
@@ -489,51 +507,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         reload()
     }
 
-    /// ⌘P: unpin a pinned item; otherwise pin it, asking which board when there are several.
+    /// ⌘P: pins the marked cards (or the selected one), asking which pinboard when there are
+    /// several; if they're all pinned already, unpins them.
     private func requestPin() {
-        guard let item = model.selected, !item.concealed else { return }
-        if item.pinned { setBoard(item, nil); return }
-        if model.boards.isEmpty { model.pendingPin = item.id; model.startNaming(.new); return }
-        if model.boards.count == 1 { setBoard(item, model.boards[0].id); return }
+        let marked = model.stack.compactMap { id in model.items.first { $0.id == id } }
+        let items = (marked.isEmpty ? [model.selected].compactMap { $0 } : marked).filter { !$0.concealed }
+        guard !items.isEmpty else { return }
+        if items.allSatisfy(\.pinned) {
+            items.forEach { store.setBoard($0.id, nil) }
+            model.stack = []
+            reload()
+            return
+        }
+        let ids = items.map(\.id)
+        if model.boards.isEmpty { model.pendingPins = ids; model.startNaming(.new); return }
+        if model.boards.count == 1 { pin(ids, model.boards[0].id); return }
 
         let menu = NSMenu()
         for (i, board) in model.boards.enumerated() {
             let entry = NSMenuItem(title: board.name, action: #selector(pinFromMenu(_:)), keyEquivalent: i < 9 ? "\(i + 1)" : "")
             entry.keyEquivalentModifierMask = []
             entry.tag = Int(board.id)
-            entry.representedObject = NSNumber(value: item.id)
+            entry.representedObject = ids.map { NSNumber(value: $0) }
             entry.target = self
             menu.addItem(entry)
         }
         menu.addItem(.separator())
         let new = NSMenuItem(title: "New Pinboard…", action: #selector(newBoardFromMenu(_:)), keyEquivalent: "n")
         new.keyEquivalentModifierMask = []
-        new.representedObject = NSNumber(value: item.id)
+        new.representedObject = ids.map { NSNumber(value: $0) }
         new.target = self
         menu.addItem(new)
         let width = panel.frame.width
         menu.popUp(positioning: menu.items.first, at: NSPoint(x: width / 2 - 80, y: panelHeight - 44), in: panel.contentView)
     }
 
+    private func pin(_ ids: [Int64], _ board: Int64) {
+        ids.forEach { store.setBoard($0, board) }
+        model.stack = []
+        reload()
+    }
+
     @objc private func pinFromMenu(_ sender: NSMenuItem) {
-        guard let id = (sender.representedObject as? NSNumber)?.int64Value,
-              let item = model.items.first(where: { $0.id == id }) else { return }
-        setBoard(item, Int64(sender.tag))
+        guard let ids = (sender.representedObject as? [NSNumber])?.map(\.int64Value) else { return }
+        pin(ids, Int64(sender.tag))
     }
 
     @objc private func newBoardFromMenu(_ sender: NSMenuItem) {
-        model.pendingPin = (sender.representedObject as? NSNumber)?.int64Value
+        model.pendingPins = (sender.representedObject as? [NSNumber])?.map(\.int64Value) ?? []
         model.startNaming(.new)
     }
 
     func commitName() {
         let name = model.nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        defer { model.naming = nil; model.pendingPin = nil; reload() }
+        defer { model.naming = nil; model.pendingPins = []; reload() }
         guard !name.isEmpty, let naming = model.naming else { return }
         switch naming {
         case .new:
             let board = store.createBoard(name)
-            if let pending = model.pendingPin { store.setBoard(pending, board) } else { model.tab = board }
+            if model.pendingPins.isEmpty { model.tab = board } else { pin(model.pendingPins, board) }
         case .rename(let id):
             store.renameBoard(id, name)
         }
@@ -592,9 +624,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     }
 
     func delete(_ item: ClipItem) {
-        guard !item.concealed else { return }
-        store.delete(item.id)
+        deleteItems([item])
+    }
+
+    /// Deletes cards, keeping what ⌘Z needs to put them back (the last 20 deletions).
+    private func deleteItems(_ items: [ClipItem]) {
+        let items = items.filter { !$0.concealed }
+        guard !items.isEmpty else { return }
+        let snaps = items.compactMap { store.snapshot($0.id) }
+        for item in items { store.delete(item.id) }
+        if !snaps.isEmpty {
+            undoGroups.append(snaps)
+            if undoGroups.count > 20 { undoGroups.removeFirst() }
+        }
+        model.canUndo = !undoGroups.isEmpty
+        let gone = Set(items.map(\.id))
+        model.stack.removeAll { gone.contains($0) }
         reload()
+    }
+
+    /// ⌘Z: puts the last deleted cards back where they were, and selects them.
+    private func undoDelete() {
+        guard let group = undoGroups.popLast() else { NSSound.beep(); return }
+        let ids = group.compactMap { store.restore($0) }
+        model.canUndo = !undoGroups.isEmpty
+        reload()
+        if let first = ids.first, let index = model.filtered.firstIndex(where: { $0.id == first }) {
+            model.selection = index
+        }
+    }
+
+    /// ⌘J: the marked cards' text joined into one new card, one per line, which is then selected.
+    private func joinMarked() {
+        let marked = model.stack.compactMap { id in model.items.first { $0.id == id } }
+        let parts = marked.compactMap { $0.kind == .file ? $0.filePaths.joined(separator: "\n") : $0.text }.filter { !$0.isEmpty }
+        guard parts.count > 1 else { NSSound.beep(); return }
+        let text = parts.joined(separator: "\n")
+        let capture = Capture(kind: Monitor.isLink(text) ? .link : .text, text: text, hash: Monitor.digest("text", Data(text.utf8)),
+                              sourceBundle: Bundle.main.bundleIdentifier, sourceName: "Shelf")
+        guard let id = store.upsert(capture) else { return }
+        model.stack = []
+        reload()
+        if let index = model.filtered.firstIndex(where: { $0.id == id }) { model.selection = index }
+    }
+
+    /// ⇧← ⇧→: marks this card and the next, like selecting several in a list.
+    private func extendMarks(_ delta: Int) {
+        if let item = model.selected, !item.concealed, !model.stack.contains(item.id) { model.toggleStack(item) }
+        model.move(delta)
+        if let item = model.selected, !item.concealed, !model.stack.contains(item.id) { model.toggleStack(item) }
     }
 
     /// Sends ⌘V to the frontmost app. Needs Accessibility; without it the item just stays on the clipboard.
@@ -1040,10 +1118,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     /// Runs at launch and hourly: expire old history and day-old exported files, then take the daily
     /// pinboard backup.
     private func prune() {
-        store.prune(olderThan: Date().addingTimeInterval(-Double(retentionDays) * 86400))
+        if historyDays > 0 { store.prune(olderThan: Date().addingTimeInterval(-Double(historyDays) * 86400)) }
+        store.deleteExpired()
         FileExport.prune(exportsDir)
         store.autoBackup()
         reload()
+    }
+
+    /// Every 30 seconds: secrets whose time is up are deleted (and open cards' countdowns refresh).
+    private func expireSecrets() {
+        if store.deleteExpired() { reload() }
+        if shelfOpen { model.now = Date() }
     }
 
     // MARK: - Menu bar
@@ -1103,6 +1188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         menu.addItem(withTitle: "Export Pinboards…", action: #selector(exportPinboards), keyEquivalent: "")
         menu.addItem(withTitle: "Import Pinboards…", action: #selector(importPinboards), keyEquivalent: "")
         menu.addItem(withTitle: "Show History Folder", action: #selector(openFolder), keyEquivalent: "")
+        menu.addItem(withTitle: "Forget Last 5 Minutes", action: #selector(forgetRecent), keyEquivalent: "")
         menu.addItem(withTitle: "Clear Unpinned History…", action: #selector(clearHistory), keyEquivalent: "")
         menu.addItem(.separator())
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
@@ -1379,6 +1465,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         } catch {
             NSAlert(error: error).runModal()
         }
+    }
+
+    /// Deletes what was copied (or pasted) in the last 5 minutes; pinned cards stay.
+    @objc private func forgetRecent() {
+        store.deleteRecent(since: Date().addingTimeInterval(-300))
+        reload()
     }
 
     @objc private func clearHistory() {

@@ -63,7 +63,8 @@ final class ShelfModel: ObservableObject {
 
     weak var actions: ShelfActions?
     weak var editor: NSTextView?
-    var pendingPin: Int64?                      // item to pin once a new board is named
+    var pendingPins: [Int64] = []               // cards to pin once a new board is named
+    @Published var canUndo = false              // ⌘Z can bring deleted cards back
 
     /// Return pastes plain text (⇧ adds the formatting back): the target app's own setting, else the default.
     var plainByDefault: Bool {
@@ -249,10 +250,11 @@ struct ShelfView: View {
     private var hints: [Hint] {
         if model.commandHeld {
             return [Hint("⌘1–9", "Paste"), Hint("⌘K", "Paste As…"), Hint("⌘R", "Copy as File…"), Hint("⌘C", "Copy"),
-                    Hint("⌘P", "Pin"), Hint("⌘S", "Stack"), Hint("⌘E", "Edit"), Hint("⌘⌫", "Delete")]
+                    Hint("⌘P", "Pin"), Hint("⌘S", "Mark"), Hint("⌘E", "Edit"), Hint("⌘⌫", "Delete"), Hint("⌘Z", "Undo")]
         }
         if !model.stack.isEmpty {
-            return [Hint("↩", "Paste stack in order"), Hint("⌥↩", "Paste all at once"), Hint("⌘S", "Add or remove")]
+            return [Hint("↩", "Paste \(model.stack.count) in order"), Hint("⌥↩", "All at once"), Hint("⌘J", "Join"),
+                    Hint("⌘P", "Pin"), Hint("⌘⌫", "Delete"), Hint("⇧← →", "Mark more")]
         }
         guard let item = model.selected else { return [Hint("⇥", "Next tab"), Hint("↑↓", "Filter")] }
         if item.concealed { return [Hint("↩", "Paste password")] }
@@ -271,6 +273,7 @@ struct ShelfView: View {
         if isFileLike && !model.askBeforePasting { hints.append(Hint("⌘R", "Copy as File…")) }
         if model.query.isEmpty { hints.append(Hint("Space", "Preview")) }
         hints.append(Hint("↑↓", "Filter"))
+        if model.canUndo { hints.append(Hint("⌘Z", "Undo delete")) }
         hints.append(Hint("⌘", "Hold for more"))
         return hints
     }
@@ -366,7 +369,10 @@ struct ShelfView: View {
                                 // Next turn of the run loop, once the card's position is known.
                                 DispatchQueue.main.async { model.actions?.pasteFromCard(item) }
                             }
-                            .onTapGesture { model.selection = index }
+                            .onTapGesture {
+                                if NSEvent.modifierFlags.contains(.shift) { model.toggleStack(item) }   // ⇧-click marks
+                                model.selection = index
+                            }
                             .contextMenu { menu(item, index) }
                             .dragOut(item.draggable) { model.actions?.dragItem(item) ?? NSItemProvider() }
                             // The margins belong to each card, so scrolling to a card keeps them:
@@ -428,7 +434,7 @@ struct ShelfView: View {
                 Button(board.name) { model.actions?.setBoard(item, board.id) }
             }
             Divider()
-            Button("New Pinboard…") { model.pendingPin = item.id; model.startNaming(.new) }
+            Button("New Pinboard…") { model.pendingPins = [item.id]; model.startNaming(.new) }
         }
         if item.pinned {
             Button("Unpin") { model.actions?.setBoard(item, nil) }
@@ -638,12 +644,36 @@ struct CardView: View {
         return names.count == 1 ? first : "\(first) and \(names.count - 1) more"
     }
 
+    /// A secret's kind ("AWS key"…) while it's waiting to be deleted.
+    private var secretKind: String? {
+        guard item.expires != nil, let text = item.text else { return nil }
+        return SecretScanner.kind(of: text) ?? "Secret"
+    }
+
     private var title: String {
         if item.concealed { return "Password" }
+        if let secretKind { return secretKind }
         return item.color != nil ? "Color" : item.kind.title
     }
 
     @ViewBuilder private var kindContent: some View {
+        if secretKind != nil {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "key.fill").font(.system(size: 14)).foregroundStyle(.secondary)
+                    Text(SecretScanner.masked(item.text ?? "")).font(.system(size: 15, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                Text("Kept for a few minutes").font(.system(size: 12, weight: .medium))
+                Text("It looks like a key or password, so it's deleted soon. Pin it to keep it.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+        } else {
+            plainKindContent
+        }
+    }
+
+    @ViewBuilder private var plainKindContent: some View {
         switch item.kind {
         case .text:
             if let color = item.color {
@@ -683,6 +713,10 @@ struct CardView: View {
 
     private var footer: String {
         if item.concealed { return "Return or ⌘V pastes it" }
+        if let expires = item.expires, secretKind != nil {
+            let minutes = max(1, Int((expires.timeIntervalSince(now) / 60).rounded(.up)))
+            return minutes == 1 ? "Deleted in 1 minute" : "Deleted in \(minutes) minutes"
+        }
         switch item.kind {
         case .text where item.color != nil:
             return "Hex color"
