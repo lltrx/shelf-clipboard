@@ -121,9 +121,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
         registerHotKeys()
 
-        monitor.onCapture = { [unowned self] capture in
+        monitor.onCapture = { [unowned self] copied in
             if stackActive { endStack() } // you copied something new; the stack is over
             model.password = nil
+            let capture = cleanLinks ? withoutTracking(copied) : copied
             let id = store.upsert(capture)
             if let id, secretMinutes > 0, capture.kind == .text || capture.kind == .link,
                let text = capture.text, SecretScanner.kind(of: text) != nil {
@@ -823,6 +824,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             pasteText(item.filePaths.joined(separator: "\n"), from: item)
         case .names:
             pasteText(item.filePaths.map { ($0 as NSString).lastPathComponent }.joined(separator: "\n"), from: item)
+        case .lineByLine:
+            let lines = TextTools.stackLines(item.text ?? "")
+            guard lines.count > 1 else { NSSound.beep(); return }
+            store.touch(item.id)
+            // Each line as a card of its own, only for the stack (never stored).
+            let cards = lines.map { line in
+                ClipItem(id: -1, kind: Monitor.isLink(line) ? .link : .text, text: line, image: nil, detail: nil,
+                         sourceBundle: item.sourceBundle, sourceName: item.sourceName, created: Date(), board: nil,
+                         formatted: false, ocr: nil)
+            }
+            beginStack(cards, plain: true)
         }
     }
 
@@ -1135,7 +1147,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
     /// Pastes the first stacked item now; each ⌘V you press afterwards pastes the next one.
     private func startStack(plain: Bool) {
-        let items = model.stack.compactMap { id in model.items.first { $0.id == id } }
+        beginStack(model.stack.compactMap { id in model.items.first { $0.id == id } }, plain: plain)
+    }
+
+    /// The marked cards, or a card's lines (Paste Lines One by One).
+    private func beginStack(_ items: [ClipItem], plain: Bool) {
         guard let first = items.first else { return }
         hide(animated: false)
         stackItems = items
@@ -1222,6 +1238,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         FileExport.prune(exportsDir)
         store.autoBackup()
         reload()
+    }
+
+    /// Remove tracking from copied links (Settings; on unless turned off).
+    private var cleanLinks: Bool { UserDefaults.standard.object(forKey: "cleanLinks") as? Bool ?? true }
+
+    /// A copied link without utm_…, fbclid, gclid and the like, on its card and on the clipboard (so
+    /// ⌘V pastes it clean too). Anything else, or a link with no tracking, is left as it is.
+    private func withoutTracking(_ capture: Capture) -> Capture {
+        guard capture.kind == .link, let text = capture.text, let clean = TextTools.removeTracking(text) else { return capture }
+        var out = capture
+        out.text = clean
+        out.formats = []
+        out.hash = Monitor.digest("text", Data(clean.utf8))
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(clean, forType: .string)
+        pb.setString(clean, forType: .URL)
+        monitor.markOwnChange()
+        return out
     }
 
     /// Every 30 seconds: secrets whose time is up are deleted (and open cards' countdowns refresh).

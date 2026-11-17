@@ -146,6 +146,11 @@ final class SettingsModel: ObservableObject {
         set { set(newValue, "askBeforePasting") }
     }
 
+    var cleanLinks: Bool {
+        get { defaults.object(forKey: "cleanLinks") as? Bool ?? true }
+        set { set(newValue, "cleanLinks") }
+    }
+
     struct AppStyle: Identifiable {
         let bundle: String
         let name: String
@@ -262,6 +267,8 @@ struct SettingsView: View {
                 }
                 Text("To paste differently in one app, open the shelf there and choose at its bottom right.")
                     .font(.callout).foregroundStyle(.secondary)
+                Toggle("Remove tracking from copied links", isOn: binding(\.cleanLinks))
+                    .help("utm_…, fbclid, gclid and similar are removed as you copy a link, from its card and from the clipboard")
                 Toggle("Ask before pasting images and files", isOn: binding(\.askBeforePasting))
                     .help("Return opens a small box to rename, resize, convert, blur or crop first; ⇧Return pastes right away")
                 LabeledContent("Auto-paste") {

@@ -13,6 +13,7 @@ enum PasteOption: Hashable {
     case recognizedText           // the text found in an image
     case paths                    // file paths, one per line
     case names                    // file names, one per line
+    case lineByLine               // each line in turn: a paste stack made of the card's lines
 
     var title: String {
         switch self {
@@ -24,6 +25,7 @@ enum PasteOption: Hashable {
         case .recognizedText: return "Paste Text in Image"
         case .paths: return "Paste File Paths"
         case .names: return "Paste File Names"
+        case .lineByLine: return "Paste Lines One by One"
         }
     }
 
@@ -38,6 +40,7 @@ enum PasteOption: Hashable {
         case .transform(let t): return t.key
         case .paths: return "p"
         case .names: return "n"
+        case .lineByLine: return "s"
         }
     }
 
@@ -48,7 +51,8 @@ enum PasteOption: Hashable {
         case .text, .link:
             let first: [PasteOption] = formatted ? [.formatted, .plain, .markdown] : [.original]
             let transforms = TextTransform.allCases.filter { $0.offered(for: text ?? "", isLink: kind == .link) }
-            return [first, transforms.map { .transform($0) }].filter { !$0.isEmpty }
+            let multiline = kind == .text && (text ?? "").utf8.contains { $0 == 10 || $0 == 13 }
+            return [first, transforms.map { .transform($0) }, multiline ? [.lineByLine] : []].filter { !$0.isEmpty }
         case .image:
             return (ocr ?? "").isEmpty ? [[.original]] : [[.original], [.recognizedText]]
         case .file:
@@ -234,6 +238,14 @@ enum TextTools {
         return siteTrackingParameters.contains { site, names in
             (host == site || host.hasSuffix("." + site)) && names.contains(name)
         }
+    }
+
+    /// The lines Paste Lines One by One pastes: each line without the spaces around it, blank lines
+    /// left out.
+    static func stackLines(_ text: String) -> [String] {
+        text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
     /// The link without tracking parameters (utm_…, fbclid, gclid…), or nil if it has none.

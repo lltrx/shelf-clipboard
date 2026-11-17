@@ -21,6 +21,16 @@ final class PasteOptionsTests: XCTestCase {
         XCTAssertTrue(sections.flatMap { $0 }.contains(.transform(.joinLines)))
     }
 
+    func testSeveralLinesCanBePastedOneByOne() {
+        let sections = PasteOption.sections(kind: .text, formatted: false, text: "a\nb", ocr: nil)
+        XCTAssertEqual(sections.last, [.lineByLine])
+        XCTAssertFalse(PasteOption.sections(kind: .text, formatted: false, text: "one line", ocr: nil)
+            .flatMap { $0 }.contains(.lineByLine))
+        XCTAssertEqual(TextTools.stackLines("  Alice \n\nBob\r\n\t\n carol@example.com  "),
+                       ["Alice", "Bob", "carol@example.com"])
+        XCTAssertEqual(TextTools.stackLines("\n \n"), [])
+    }
+
     func testJSONIsOfferedFormatting() {
         let sections = PasteOption.sections(kind: .text, formatted: false, text: " {\"a\": 1} ", ocr: nil)
         XCTAssertTrue(sections.flatMap { $0 }.contains(.transform(.prettyJSON)))
