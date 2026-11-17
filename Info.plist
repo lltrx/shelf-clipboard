@@ -24,5 +24,11 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Shelf adds the screenshots you take to the shelf, so you can paste them. They stay on your Mac.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Shelf adds the screenshots you take to the shelf, so you can paste them. They stay on your Mac.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Shelf adds the screenshots you take to the shelf, so you can paste them. They stay on your Mac.</string>
 </dict>
 </plist>

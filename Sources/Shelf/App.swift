@@ -61,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
     private var store: Store!
     private let monitor = Monitor()
+    private let screenshots = ScreenshotWatcher()
     private let model = ShelfModel()
     private let panel = ShelfPanel()
     private let preview = ShelfPanel()
@@ -115,6 +116,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             model.password = monitor.concealedOnClipboard.map(ClipItem.concealedPlaceholder)
         }
         monitor.start()
+        screenshots.onScreenshot = { [unowned self] url in addScreenshot(url) }
+        if addScreenshots { screenshots.start() }
 
         prune()
         pruneTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in self?.prune() }
@@ -299,6 +302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         }
         panel.makeKeyAndOrderFront(nil)
         model.focusTick += 1
+        if addScreenshots { screenshots.start() }   // follows the screenshot folder if it was changed
         NSAnimationContext.runAnimationGroup { context in
             context.duration = reduceMotion ? 0.12 : 0.22
             context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.25, 1)
@@ -1025,6 +1029,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
         let pause = menu.addItem(withTitle: "Pause Capture", action: #selector(togglePause), keyEquivalent: "")
         pause.state = monitor.paused ? .on : .off
+        let shots = menu.addItem(withTitle: "Add Screenshots", action: #selector(toggleScreenshots), keyEquivalent: "")
+        shots.state = addScreenshots ? .on : .off
+        shots.toolTip = "Screenshots saved as files (⇧⌘3, ⇧⌘4, ⇧⌘5) appear in the shelf, ready to paste"
         let style = menu.addItem(withTitle: "Paste Style", action: nil, keyEquivalent: "")
         menu.setSubmenu(pasteStyleMenu(), for: style)
         let ignored = menu.addItem(withTitle: "Ignored Apps", action: nil, keyEquivalent: "")
@@ -1068,6 +1075,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     @objc private func endStackFromMenu() { endStack() }
 
     @objc private func togglePause() { monitor.paused.toggle() }
+
+    @objc private func toggleScreenshots() { addScreenshots.toggle() }
+
+    // MARK: - Screenshots
+
+    /// Add Screenshots (on unless turned off): screenshot files appear in the shelf.
+    private var addScreenshots: Bool {
+        get { UserDefaults.standard.object(forKey: "addScreenshots") as? Bool ?? true }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "addScreenshots")
+            newValue ? screenshots.start() : screenshots.stop()
+        }
+    }
+
+    /// A new screenshot file: added to History as an image, as if it had been copied. Paused
+    /// capture and an ignored Screenshot app skip it, as they do copies.
+    private func addScreenshot(_ url: URL) {
+        guard !monitor.paused, !monitor.ignoredApps.contains(ScreenshotWatcher.screenshotApp) else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let capture = ScreenshotWatcher.capture(url) else { return }
+            DispatchQueue.main.async { [self] in
+                store.upsert(capture)
+                reload()
+                runOCR()
+            }
+        }
+    }
 
     @objc private func useFormattedEverywhere() { setPlainEverywhere(false) }
 

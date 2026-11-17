@@ -29,6 +29,10 @@ All notable changes to Shelf are documented here. The format is based on
 - A bar at the bottom of the shelf shows what the keys do for the selected card. **Hold ⌘** to see
   ⌘1–⌘9 on the cards and every ⌘ shortcut.
 - Text cards that are just a hex color (`#1E90FF`) show the color.
+- **Screenshots go straight into the shelf:** screenshots macOS saves as files (⇧⌘3, ⇧⌘4, ⇧⌘5, on
+  the Desktop unless changed) appear in History as images, ready to paste, rename or convert, and
+  their text is searchable. Only files macOS marks as screenshots count. Turn it off with **Add
+  Screenshots** in the Shelf menu. macOS asks once for access to the folder they're saved in.
 - **File cards show the file itself:** a screenshot or photo, the first page of a PDF, the start of a
   text file (Quick Look thumbnails). **Space** on a file opens the full Quick Look preview, where PDFs
   and text scroll and videos play.

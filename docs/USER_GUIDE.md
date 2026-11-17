@@ -138,6 +138,18 @@ For filling forms or spreadsheets with several items in order:
 **⌥Return** instead pastes all stacked items at once, one per line. Copying something new ends the
 stack; you can also end it or skip an item from the menu bar.
 
+## Screenshots
+
+Screenshots you take with **⇧⌘3**, **⇧⌘4** or **⇧⌘5** appear in History by themselves, as images you
+can paste, rename or convert (⌘R), even though macOS saves them as files rather than copying them.
+The first time, macOS asks whether Shelf may access the folder they're saved in (the Desktop, unless
+you changed it in the Screenshot app's Options); allow it.
+
+- They arrive a few seconds after you take them, when macOS saves the file. For no delay, open the
+  Screenshot app (⇧⌘5) → **Options** and turn off **Show Floating Thumbnail**.
+- Only files macOS marks as screenshots are added, not other images saved in that folder.
+- Don't want this? Turn off **Add Screenshots** in the Shelf menu. Pause Capture also pauses it.
+
 ## Searching screenshots
 
 Shelf reads the text inside copied images on your Mac (English and Arabic), so typing a word that
@@ -149,7 +161,8 @@ Click the clipboard icon in the menu bar, or the **⋯** button at the top right
 for the menu below. The ⋯ button is handy when your menu bar is crowded: on Macs with a notch, macOS
 hides menu bar icons that don't fit, and Shelf's may be one of them.
 
-- **Pause Capture:** stop recording copies until you turn it back on.
+- **Pause Capture:** stop recording copies (and screenshots) until you turn it back on.
+- **Add Screenshots:** put new screenshots in the shelf (on unless you turn it off).
 - **Paste Style:** what Return pastes by default (With Formatting or Plain Text), and the apps you've
   set differently; click one to make it follow the default again.
 - **Launch at Login:** start Shelf automatically.

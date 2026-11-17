@@ -35,6 +35,7 @@ shelf_clipboard/
     ├── ExportPlan.swift     Copy as File formats, file naming, form state (Foundation only)
     ├── FileExport.swift     Image conversion (ImageIO), writing exports, pruning the Exports folder
     ├── QuickLook.swift      File thumbnails (QuickLookThumbnailing) and the Quick Look preview of a file
+    ├── ScreenshotWatcher.swift  Adds screenshot files from the screenshot folder to History
     ├── Store.swift          SQLite storage, data model, schema migration
     ├── Monitor.swift        Pasteboard polling and capture
     ├── HotKey.swift         Global shortcut (Carbon RegisterEventHotKey)
@@ -59,6 +60,13 @@ shelf at the bottom of the screen and the preview above it. Non-activating means
 stays frontmost, so the paste lands there. Keys are handled in one local `NSEvent` monitor
 (`handleKey` / `handleEditorKey`) using physical key codes, so shortcuts work in any keyboard layout
 (including Arabic). The panels hide when focus leaves both of them.
+
+**Screenshots (ScreenshotWatcher.swift).** macOS saves screenshots as files, so they never reach the
+pasteboard. A `DispatchSource` watches the screenshot folder (`location` in `com.apple.screencapture`,
+else ~/Desktop) and, 0.5 s after a change, adds new files that carry the
+`com.apple.metadata:kMDItemIsScreenCapture` attribute as image cards (converted to PNG, source app
+`com.apple.screenshot.launcher`). Info.plist has the folder-access explanations macOS shows. The
+setting is `addScreenshots` (default on); the folder is re-read each time the shelf opens.
 
 **Motion.** `show()` slides and fades the shelf in with `NSAnimationContext`; `hide(animated:)` fades
 it out, except after a paste (`hide(animated: false)`): the synthetic ⌘V must reach the app below, not
@@ -114,7 +122,7 @@ Backups/         pinboards-YYYY-MM-DD.json, last 7 kept
 Exports/         <uuid>/<name>: files made by Copy as File and image drags, deleted after a day
 ```
 
-Settings (UserDefaults, `com.turkifaisal.shelf`): `hotkey`, `pastePlainByDefault`, `pasteStyleByApp`
+Settings (UserDefaults, `com.turkifaisal.shelf`): `hotkey`, `addScreenshots`, `pastePlainByDefault`, `pasteStyleByApp`
 (bundle id → Bool, true = plain text), `ignoredApps`, and the last Copy as File choices
 `exportImageFormat`, `exportTextFormat`, `exportQuality`.
 

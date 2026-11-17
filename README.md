@@ -98,6 +98,7 @@ defaults write com.turkifaisal.shelf hotkey "cmd+option+v"
   text changed by Paste As (⌘K) is pasted but not saved.
 - Files made by Copy as File (⌘R) and images dragged out of the shelf are written to `Exports/`
   and deleted after a day (the app you paste or drop them into keeps its own copy).
+- Screenshots you take (saved as files) are added to History too; turn that off with **Add Screenshots**.
 - Screenshot text is recognized on-device with Apple Vision (English and Arabic) in the background.
 - Passwords copied from password managers are not recorded; ⌘V still pastes them, and a 🔒 card
   in the shelf shows one is on the clipboard.
