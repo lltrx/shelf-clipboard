@@ -3,6 +3,8 @@ name: Beta release
 # Publishes a test build as a GitHub pre-release, for the Homebrew cask lltrx/tap/shelf-clipboard@beta.
 # Either change .github/beta-version (for example to 1.6.0-beta.2) and push it on any branch, or push
 # a tag such as v1.6.0-beta.2. The commit is tested, built with that version, tagged, and published.
+# If a run gets stuck or GitHub cancels it, start it again from the Actions tab (Run workflow, on the
+# branch): it publishes the version in .github/beta-version, unless that one is already out.
 # CI has no Developer ID, so beta builds are ad-hoc signed and not notarized (the release notes say
 # what that means for installing). Stable releases still come from scripts/release.sh.
 
@@ -11,6 +13,7 @@ on:
     branches: ["**"]
     paths: [".github/beta-version", ".github/workflows/beta.yml"]   # branch pushes: only these
     tags: ["v*-beta*"]                # tag pushes always run (paths don't apply to tags)
+  workflow_dispatch:                  # Run workflow, from the Actions tab
 
 permissions:
   contents: write
@@ -19,6 +22,7 @@ jobs:
   beta:
     name: Build and publish beta
     runs-on: macos-15   # macos-14 was retired on 2026-11-02
+    timeout-minutes: 30 # a normal run takes about 3
     steps:
       - uses: actions/checkout@v4
 
