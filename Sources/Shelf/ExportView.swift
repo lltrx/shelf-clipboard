@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// The Copy as File form (⇧⌘C), shown above the shelf where the preview goes.
+/// The Copy as File form (⌘R), shown above the shelf where the preview goes.
 /// Return pastes the file into the app you were in, ⌘C copies it, ⌘S saves it, Esc goes back.
 struct ExportView: View {
     @ObservedObject var model: ShelfModel
@@ -136,14 +136,8 @@ struct ExportView: View {
         case .image:
             Thumbnail(url: model.actions?.imageURL(draft.item))
         case .files:
-            let first = draft.item.filePaths.first
-            if let first, FileExport.isImage(first) {
-                Thumbnail(url: URL(fileURLWithPath: first))
-            } else if let first {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: first))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 96, height: 96)
+            if let first = draft.item.filePaths.first {
+                FileThumbnail(path: first, maxSize: 260)
             }
         case .text:
             Image(nsImage: NSWorkspace.shared.icon(for: draft.format.utType))

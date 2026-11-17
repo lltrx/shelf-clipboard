@@ -1,6 +1,6 @@
 import Foundation
 
-// Copy as File (⇧⌘C): what a card becomes as a file, and what that file is called.
+// Copy as File (⌘R): what a card becomes as a file, and what that file is called.
 // Foundation only, so it can be unit tested without the UI. The conversion itself is in FileExport.swift.
 
 /// File formats offered in Copy as File.

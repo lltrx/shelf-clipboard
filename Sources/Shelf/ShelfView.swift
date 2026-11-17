@@ -243,7 +243,7 @@ struct ShelfView: View {
 
     private var hints: [Hint] {
         if model.commandHeld {
-            return [Hint("⌘1–9", "Paste"), Hint("⌘K", "Paste As…"), Hint("⇧⌘C", "Copy as File…"), Hint("⌘C", "Copy"),
+            return [Hint("⌘1–9", "Paste"), Hint("⌘K", "Paste As…"), Hint("⌘R", "Copy as File…"), Hint("⌘C", "Copy"),
                     Hint("⌘P", "Pin"), Hint("⌘S", "Stack"), Hint("⌘E", "Edit"), Hint("⌘⌫", "Delete")]
         }
         if !model.stack.isEmpty {
@@ -259,6 +259,7 @@ struct ShelfView: View {
             hints.append(Hint("↩", "Paste"))
         }
         hints.append(Hint("⌘K", "Paste As…"))
+        if item.kind == .image || item.kind == .file { hints.append(Hint("⌘R", "Copy as File…")) }
         if model.query.isEmpty { hints.append(Hint("Space", "Preview")) }
         hints.append(Hint("↑↓", "Filter"))
         hints.append(Hint("⌘", "Hold for more"))
@@ -606,6 +607,13 @@ struct CardView: View {
         }
     }
 
+    /// "Report.pdf", or "Report.pdf and 2 more".
+    private var fileNames: String {
+        let names = item.filePaths.map { ($0 as NSString).lastPathComponent }
+        guard let first = names.first else { return "" }
+        return names.count == 1 ? first : "\(first) and \(names.count - 1) more"
+    }
+
     private var title: String {
         if item.concealed { return "Password" }
         return item.color != nil ? "Color" : item.kind.title
@@ -641,7 +649,11 @@ struct CardView: View {
             Thumbnail(url: imageURL)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .file:
-            FileList(paths: Array(item.filePaths.prefix(4)), iconSize: 44, showPaths: false)
+            VStack(alignment: .leading, spacing: 6) {
+                FileThumbnail(path: item.filePaths.first ?? "", maxSize: 200)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text(fileNames).font(.system(size: 11)).lineLimit(1).truncationMode(.middle)
+            }
         }
     }
 
@@ -674,29 +686,22 @@ struct CardView: View {
     }()
 }
 
+/// Several files in the preview, each with its Quick Look picture, name and folder.
 struct FileList: View {
     let paths: [String]
-    let iconSize: CGFloat
-    let showPaths: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if !showPaths, let first = paths.first {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: first)).resizable().frame(width: iconSize, height: iconSize)
-            }
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(paths, id: \.self) { path in
-                HStack(spacing: 10) {
-                    if showPaths {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: path)).resizable().frame(width: iconSize, height: iconSize)
-                    }
+                HStack(spacing: 12) {
+                    FileThumbnail(path: path, maxSize: 64)
+                        .frame(width: 56, height: 56)
                     VStack(alignment: .leading, spacing: 1) {
                         Text((path as NSString).lastPathComponent)
-                            .font(.system(size: showPaths ? 13 : 11))
+                            .font(.system(size: 13))
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        if showPaths {
-                            Text(path).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                        }
+                        Text(path).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     }
                 }
             }
@@ -768,10 +773,14 @@ struct PreviewView: View {
                 }
             }
         case .file:
-            ScrollView {
-                FileList(paths: item.filePaths, iconSize: 32, showPaths: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
+            if item.filePaths.count == 1, let path = item.filePaths.first, FileManager.default.fileExists(atPath: path) {
+                QuickLookView(url: URL(fileURLWithPath: path))
+            } else {
+                ScrollView {
+                    FileList(paths: item.filePaths)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                }
             }
         }
     }

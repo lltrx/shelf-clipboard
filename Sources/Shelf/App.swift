@@ -152,7 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             return handleKey(event) ? nil : event
         }
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [unowned self] event in
-            // Releasing ⌘ counts in any of Shelf's panels (⌘E and ⇧⌘C move focus to the preview).
+            // Releasing ⌘ counts in any of Shelf's panels (⌘E and ⌘R move focus to the preview).
             if !event.modifierFlags.contains(.command) {
                 commandChanged(false)
             } else if event.window === panel {
@@ -215,7 +215,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         guard cmd else { return false }
         switch e.keyCode {
         case 35: requestPin(); return true                                  // P
-        case 8 where shift: model.selected.map(startExport); return true    // ⇧C: Copy as File…
+        case 15: model.selected.map(startExport); return true               // R: Copy as File… ("rename")
+        case 8 where shift: model.selected.map(startExport); return true    // ⇧C: the same, as in betas 1–3
         case 8 where model.query.isEmpty: model.selected.map(copy); return true // C
         case 40: showPasteMenu(); return true                               // K: Paste As…
         case 45: model.startNaming(.new); return true                       // N
@@ -674,7 +675,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     /// Files made by Copy as File and by dragging images out. Deleted after a day.
     private var exportsDir: URL { store.dir.appendingPathComponent("Exports", isDirectory: true) }
 
-    /// ⇧⌘C: opens the Copy as File form above the shelf, with a name and format to start from.
+    /// ⌘R: opens the Copy as File form above the shelf, with a name and format to start from.
     func startExport(_ item: ClipItem) {
         guard !item.concealed else { return }
         endEditing()

@@ -59,10 +59,10 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 | Return / double-click | Paste: with formatting, or as plain text in apps you set that way |
 | ⇧Return | Paste the other way (plain text ↔ with formatting) |
 | ⌘K | **Paste As:** formatted, plain text, Markdown, UPPERCASE / lowercase / Capitalized, trimmed, joined lines, formatted JSON, link without tracking, text in an image, file paths or names |
-| ⇧⌘C | **Copy as File:** name it and pick a format (PNG, JPEG, HEIC, TIFF, GIF, PDF · Plain Text, Markdown, RTF, Word, HTML), then paste, copy (⌘C) or save (⌘S) it |
+| ⌘R | **Copy as File:** name it and pick a format (PNG, JPEG, HEIC, TIFF, GIF, PDF · Plain Text, Markdown, RTF, Word, HTML), then paste, copy (⌘C) or save (⌘S) it |
 | ⌘1 … ⌘9 (⇧ for the other way) | Paste item 1–9 (hold ⌘ to see the numbers and every ⌘ shortcut) |
 | drag a card | Drop it into another app (images become a named PNG file) |
-| Space | Full preview (when the search field is empty) |
+| Space | Full preview (when the search field is empty); files open in Quick Look |
 | ⌘E | Edit in the preview, then ⌘Return to paste (⇧⌘Return plain) · Esc cancels |
 | ⌘C | Copy to clipboard without pasting |
 | ⌘P | Pin / unpin (asks which pinboard when there are several; 1–9 picks) |
@@ -96,7 +96,7 @@ defaults write com.turkifaisal.shelf hotkey "cmd+option+v"
 - Unpinned items are deleted after 30 days; pinned items never expire.
 - Text keeps RTF / HTML / RTFD formatting (up to 10 MB each). Edited text is saved as a new item;
   text changed by Paste As (⌘K) is pasted but not saved.
-- Files made by Copy as File (⇧⌘C) and images dragged out of the shelf are written to `Exports/`
+- Files made by Copy as File (⌘R) and images dragged out of the shelf are written to `Exports/`
   and deleted after a day (the app you paste or drop them into keeps its own copy).
 - Screenshot text is recognized on-device with Apple Vision (English and Arabic) in the background.
 - Passwords copied from password managers are not recorded; ⌘V still pastes them, and a 🔒 card

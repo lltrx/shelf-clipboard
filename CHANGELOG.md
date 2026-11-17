@@ -13,7 +13,7 @@ All notable changes to Shelf are documented here. The format is based on
   spaces, shared indentation and extra blank lines), Join Lines, and Format JSON (keeps key order).
   Links: Remove Tracking (utm_…, fbclid, gclid and others). Images: Paste Text in Image (the text Shelf
   recognized). Files: Paste File Paths or File Names. The card itself isn't changed.
-- **Copy as File (⇧⌘C, or right-click):** turn a card into a file with the name and format you choose.
+- **Copy as File (⌘R, or right-click):** turn a card into a file with the name and format you choose.
   Images and image files convert to PNG, JPEG, HEIC, TIFF, GIF or PDF, with a quality slider for JPEG
   and HEIC and a size option (75%, 50%, 25%); the form shows the resulting size before you commit.
   Text becomes a Plain Text (any extension you type, such as `deploy.sh`), Markdown, RTF, Word or HTML
@@ -29,6 +29,9 @@ All notable changes to Shelf are documented here. The format is based on
 - A bar at the bottom of the shelf shows what the keys do for the selected card. **Hold ⌘** to see
   ⌘1–⌘9 on the cards and every ⌘ shortcut.
 - Text cards that are just a hex color (`#1E90FF`) show the color.
+- **File cards show the file itself:** a screenshot or photo, the first page of a PDF, the start of a
+  text file (Quick Look thumbnails). **Space** on a file opens the full Quick Look preview, where PDFs
+  and text scroll and videos play.
 - **Motion:** the shelf slides up as it opens and fades as it closes, the highlight slides between
   tabs and filters, cards ease in and out as you search, filter, pin or delete, the selection glides
   along the row, and the preview and Copy as File fade in. Pasting still closes the shelf at once. With

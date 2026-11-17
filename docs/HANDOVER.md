@@ -34,6 +34,7 @@ shelf_clipboard/
     ├── PasteOptions.swift   Paste As options, text transforms, Markdown writer, hex colors (Foundation only)
     ├── ExportPlan.swift     Copy as File formats, file naming, form state (Foundation only)
     ├── FileExport.swift     Image conversion (ImageIO), writing exports, pruning the Exports folder
+    ├── QuickLook.swift      File thumbnails (QuickLookThumbnailing) and the Quick Look preview of a file
     ├── Store.swift          SQLite storage, data model, schema migration
     ├── Monitor.swift        Pasteboard polling and capture
     ├── HotKey.swift         Global shortcut (Carbon RegisterEventHotKey)
@@ -82,7 +83,7 @@ built from the card's attributed string by `AppDelegate.markdown` (bold/italic/m
 traits, links from `.link`) and `MarkdownWriter`. Transformed text is written to the pasteboard with
 `markOwnChange()`, so it isn't recorded as a new card.
 
-**Copy as File (⇧⌘C).** `startExport` fills an `ExportDraft` (names, formats, what can be converted)
+**Copy as File (⌘R).** `startExport` fills an `ExportDraft` (names, formats, what can be converted)
 and shows `ExportView` in the preview panel, which then takes key focus like the editor does.
 `ExportDraft.fileNames` (via `ExportNaming`) decides the final names. On Return / ⌘C / ⌘S, text is
 turned into bytes on the main thread (AppKit's RTF/DOCX/HTML writers), then `FileExport.write` converts

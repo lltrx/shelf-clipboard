@@ -32,7 +32,7 @@ These work while the shelf is open.
 | ⌘K | Paste As: every way to paste this card (see below) |
 | ⌘1 … ⌘9 | Paste card 1–9 directly (add ⇧ for the other way) |
 | ⌘C | Copy the card to the clipboard without pasting |
-| ⇧⌘C | Copy as File: choose a file name and format (see below) |
+| ⌘R | Copy as File: choose a file name and format (see below) |
 | Space | Open the full preview (when the search field is empty) |
 | ⌘E | Edit the card before pasting |
 | ⌘P | Pin or unpin |
@@ -78,12 +78,12 @@ shown next to one, or click it. The card itself stays as it was.
 
 Every card also has **Copy as File…** (E).
 
-## Copy as File (⇧⌘C)
+## Copy as File (⌘R)
 
 Turns a card into a real file with the name and format you choose: rename a screenshot before
 sending it, convert a HEIC photo to JPEG, or turn a snippet into `notes.md`.
 
-1. Select a card and press **⇧⌘C** (or right-click → **Copy as File…**, or ⌘K then E).
+1. Select a card and press **⌘R** (or right-click → **Copy as File…**, or ⌘K then E).
 2. Type a **name**. The extension follows the format, so you don't need to type it.
 3. Pick a **format**:
    - Images, and image files such as HEIC or PNG photos: PNG, JPEG, HEIC, TIFF, GIF or PDF. For JPEG
@@ -120,7 +120,9 @@ Pinned cards never expire. Group them into named pinboards, such as "Code comman
 ## Preview and edit
 
 - **Space** opens a large preview above the shelf: the full text with formatting, the full image
-  (with any text found in it), or the full file paths. ← → keeps working while it is open.
+  (with any text found in it), or a copied file in Quick Look, the same preview Finder shows (PDFs and
+  text scroll, videos play). Several files are listed with a picture of each. ← → keeps working while
+  it is open. File cards in the shelf show the file itself too, not just its icon.
 - **⌘E** makes the text editable. Then **⌘Return** pastes your edited version, **⇧⌘Return** pastes it
   as plain text, and **Esc** cancels. The edited version is saved as a new card; the original stays.
 
