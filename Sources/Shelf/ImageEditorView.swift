@@ -1,43 +1,49 @@
 import AppKit
 import SwiftUI
 
-/// Blur and crop, inside the paste box (⌘E, or the Blur & Crop button). Drag over the image: with
-/// Blur the area becomes a mosaic, with Crop only that area is kept. B and C switch tools, ⌘Z
-/// undoes, ⌫ clears, Return is Done and Esc puts back what there was. The box then pastes, copies
-/// or saves the edited image.
+/// Mark up, blur and crop an image, inside the paste box (⌘E, or the Edit Image button). Drag on
+/// the image with a tool: Arrow (A), Box (R), Highlight (H), Text (T: click, type, Return), Blur (B:
+/// the area becomes a mosaic) or Crop (C: only that area is kept). 1–7 pick a color, ⌘Z undoes,
+/// ⌫ clears, Return is Done and Esc puts back what there was. The box then pastes, copies or saves
+/// the edited image.
 struct ImageEditorView: View {
     @ObservedObject var model: ShelfModel
     let draft: ExportDraft
     let source: URL?
     @State private var base: CGImage?      // the image, at most 1600 pixels across
-    @State private var shown: CGImage?     // the same with the blurs applied
-    @State private var dragging: EditRect?
+    @State private var shown: CGImage?     // the same with the marks and blurs, as the file will have them
+    @State private var drag: (from: EditPoint, to: EditPoint)?
     @State private var unreadable = false
     @State private var crosshair = false
+    @FocusState private var textFocused: Bool
 
     private var editor: ExportDraft.Editor { draft.editor ?? ExportDraft.Editor(before: draft.edits) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                Picker("Tool", selection: Binding(get: { editor.tool }, set: { model.exportDraft?.editor?.tool = $0 })) {
-                    Text("Blur").tag(EditTool.blur)
-                    Text("Crop").tag(EditTool.crop)
+                HStack(spacing: 3) {
+                    ForEach(EditTool.allCases, id: \.self) { tool in toolButton(tool) }
                 }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .fixedSize()
-                Text(instruction)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                Divider().frame(height: 18)
+                if editor.typing != nil {
+                    TextField("Type, then Return", text: Binding(get: { model.exportDraft?.typedText ?? "" },
+                                                                 set: { model.exportDraft?.typeText($0) }))
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 12))
+                        .frame(maxWidth: 240)
+                        .focused($textFocused)
+                } else if editor.tool.usesColor {
+                    HStack(spacing: 5) {
+                        ForEach(Array(MarkColor.allCases.enumerated()), id: \.element) { index, color in swatch(color, index) }
+                    }
+                }
                 Spacer(minLength: 8)
                 Button { model.exportDraft?.undoEdit() } label: { Image(systemName: "arrow.uturn.backward") }
                     .help("Undo (⌘Z)")
-                    .disabled(!editor.canUndo)
+                    .disabled(!editor.canUndo && editor.typing == nil)
                 Button("Clear") { model.exportDraft?.clearEdits() }
-                    .help("Remove all blurs and the crop (⌫)")
+                    .help("Remove everything you've done to the image (⌫)")
                     .disabled(draft.edits.isEmpty)
             }
             .controlSize(.small)
@@ -50,14 +56,11 @@ struct ImageEditorView: View {
             Divider()
 
             HStack(spacing: 8) {
-                HStack(spacing: 10) {
-                    hint("B", "Blur")
-                    hint("C", "Crop")
-                    hint("⌘Z", "Undo")
-                    hint("esc", "Cancel")
-                }
-                .foregroundStyle(.secondary)
-                .fixedSize()
+                Text(instruction)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Spacer(minLength: 8)
                 Button("Cancel") { model.actions?.closeImageEditor(keep: false) }
                 Button("Done") { model.actions?.closeImageEditor(keep: true) }
@@ -76,12 +79,66 @@ struct ImageEditorView: View {
             if crosshair { NSCursor.pop() }
             crosshair = false
         }
-        .onChange(of: draft.edits.blurs) { render() }
+        .onChange(of: draft.edits.uncropped) { render() }
+        .onChange(of: editor.typing) {
+            // After the field appears, so it really gets the keys.
+            let typing = editor.typing != nil
+            DispatchQueue.main.async { textFocused = typing }
+        }
     }
 
+    /// What the selected tool does, or what's been done so far.
     private var instruction: String {
-        if !draft.edits.isEmpty { return draft.edits.summary.capitalizedFirst }
-        return editor.tool == .blur ? "Drag over what to hide" : "Drag around what to keep"
+        if editor.typing != nil { return "Return keeps the text, Esc removes it" }
+        let done = draft.edits.isEmpty ? "" : " · " + draft.edits.summary
+        return editor.tool.instruction + done
+    }
+
+    private func toolButton(_ tool: EditTool) -> some View {
+        let on = editor.tool == tool
+        return Button {
+            model.exportDraft?.finishTyping(keep: true)
+            model.exportDraft?.editor?.tool = tool
+        } label: {
+            Image(systemName: icon(tool))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(on ? Color.white : Color.primary)
+                .frame(width: 28, height: 22)
+                .background(RoundedRectangle(cornerRadius: 5).fill(on ? Color.accentColor : Color.primary.opacity(0.07)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(tool.title) (\(tool.letter))")
+    }
+
+    private func icon(_ tool: EditTool) -> String {
+        switch tool {
+        case .arrow: return "arrow.up.right"
+        case .box: return "rectangle"
+        case .highlight: return "highlighter"
+        case .text: return "textformat"
+        case .blur: return "eye.slash"
+        case .crop: return "crop"
+        }
+    }
+
+    private func swatch(_ color: MarkColor, _ index: Int) -> some View {
+        let on = editor.color == color
+        return Button { model.exportDraft?.editor?.color = color } label: {
+            Circle()
+                .fill(swiftUIColor(color))
+                .overlay(Circle().stroke(Color.primary.opacity(0.25), lineWidth: 0.5))
+                .frame(width: 14, height: 14)
+                .padding(2)
+                .overlay(Circle().stroke(Color.accentColor, lineWidth: 2).opacity(on ? 1 : 0))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help("\(color.rawValue.capitalized) (\(index + 1))")
+    }
+
+    private func swiftUIColor(_ color: MarkColor) -> Color {
+        Color(.sRGB, red: color.rgb.red, green: color.rgb.green, blue: color.rgb.blue, opacity: 1)
     }
 
     @ViewBuilder private var canvas: some View {
@@ -92,9 +149,9 @@ struct ImageEditorView: View {
                     .resizable()
                     .interpolation(.high)
                     .frame(width: size.width, height: size.height)
-                    .overlay(marks(size))
+                    .overlay(overlays(size))
                     .contentShape(Rectangle())
-                    .gesture(drag(size))
+                    .gesture(dragGesture(size))
                     .onHover { inside in
                         guard inside != crosshair else { return }
                         crosshair = inside
@@ -113,15 +170,20 @@ struct ImageEditorView: View {
         .padding(6)
     }
 
-    /// Outlines of the blurred areas, the crop (everything outside it dimmed), and the area being dragged.
-    private func marks(_ size: CGSize) -> some View {
-        let crop = editor.tool == .crop ? (dragging ?? draft.edits.crop) : draft.edits.crop
+    /// Outlines of the blurred areas, the crop (everything outside it dimmed), and what's being dragged.
+    /// The marks themselves are in the image (`shown`), drawn the way the file will have them.
+    private func overlays(_ size: CGSize) -> some View {
+        let dragArea = drag.map { EditRect(x: min($0.from.x, $0.to.x), y: min($0.from.y, $0.to.y),
+                                           w: abs($0.to.x - $0.from.x), h: abs($0.to.y - $0.from.y)) }
+        let crop = editor.tool == .crop ? (dragArea ?? draft.edits.crop) : draft.edits.crop
+        let tint = editor.tool.usesColor ? swiftUIColor(editor.color) : Color.accentColor
         return ZStack(alignment: .topLeading) {
             ForEach(Array(draft.edits.blurs.enumerated()), id: \.offset) { _, blur in
+                let r = rect(blur, size)
                 Rectangle()
                     .stroke(Color.white.opacity(0.75), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                    .frame(width: rect(blur, size).width, height: rect(blur, size).height)
-                    .offset(x: rect(blur, size).minX, y: rect(blur, size).minY)
+                    .frame(width: r.width, height: r.height)
+                    .offset(x: r.minX, y: r.minY)
             }
             if let crop {
                 let r = rect(crop, size)
@@ -135,39 +197,60 @@ struct ImageEditorView: View {
                     .frame(width: r.width, height: r.height)
                     .offset(x: r.minX, y: r.minY)
             }
-            if editor.tool == .blur, let dragging {
-                let r = rect(dragging, size)
-                Rectangle()
-                    .fill(Color.accentColor.opacity(0.25))
-                    .overlay(Rectangle().stroke(Color.accentColor, lineWidth: 1.5))
-                    .frame(width: r.width, height: r.height)
-                    .offset(x: r.minX, y: r.minY)
+            if let drag, let dragArea {
+                let r = rect(dragArea, size)
+                switch editor.tool {
+                case .blur:
+                    Rectangle()
+                        .fill(Color.accentColor.opacity(0.25))
+                        .overlay(Rectangle().stroke(Color.accentColor, lineWidth: 1.5))
+                        .frame(width: r.width, height: r.height)
+                        .offset(x: r.minX, y: r.minY)
+                case .box:
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(tint, lineWidth: 2.5)
+                        .frame(width: r.width, height: r.height)
+                        .offset(x: r.minX, y: r.minY)
+                case .highlight:
+                    Rectangle()
+                        .fill(swiftUIColor(.yellow).opacity(0.45))
+                        .frame(width: r.width, height: r.height)
+                        .offset(x: r.minX, y: r.minY)
+                case .arrow:
+                    Path { p in
+                        p.move(to: CGPoint(x: CGFloat(drag.from.x) * size.width, y: CGFloat(drag.from.y) * size.height))
+                        p.addLine(to: CGPoint(x: CGFloat(drag.to.x) * size.width, y: CGFloat(drag.to.y) * size.height))
+                    }
+                    .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                case .crop, .text:
+                    EmptyView()
+                }
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
         .allowsHitTesting(false)
     }
 
-    private func drag(_ size: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: 2, coordinateSpace: .local)
-            .onChanged { value in dragging = area(from: value.startLocation, to: value.location, in: size) }
+    private func dragGesture(_ size: CGSize) -> some Gesture {
+        // Distance 0, so a click counts too (Text starts where you click).
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .onChanged { value in
+                drag = (point(value.startLocation, in: size), point(value.location, in: size))
+            }
             .onEnded { value in
-                dragging = nil
-                model.exportDraft?.addEdit(area(from: value.startLocation, to: value.location, in: size))
+                drag = nil
+                model.exportDraft?.addDrag(from: point(value.startLocation, in: size), to: point(value.location, in: size))
             }
     }
 
-    private func area(from a: CGPoint, to b: CGPoint, in size: CGSize) -> EditRect {
-        guard size.width > 0, size.height > 0 else { return EditRect(x: 0, y: 0, w: 0, h: 0) }
-        func clampX(_ x: CGFloat) -> Double { Double(min(max(x, 0), size.width) / size.width) }
-        func clampY(_ y: CGFloat) -> Double { Double(min(max(y, 0), size.height) / size.height) }
-        let x0 = clampX(min(a.x, b.x)), x1 = clampX(max(a.x, b.x))
-        let y0 = clampY(min(a.y, b.y)), y1 = clampY(max(a.y, b.y))
-        return EditRect(x: x0, y: y0, w: x1 - x0, h: y1 - y0)
+    private func point(_ p: CGPoint, in size: CGSize) -> EditPoint {
+        guard size.width > 0, size.height > 0 else { return EditPoint(x: 0, y: 0) }
+        return EditPoint(x: Double(p.x / size.width), y: Double(p.y / size.height)).clamped
     }
 
     private func rect(_ area: EditRect, _ size: CGSize) -> CGRect {
-        CGRect(x: area.x * size.width, y: area.y * size.height, width: area.w * size.width, height: area.h * size.height)
+        CGRect(x: CGFloat(area.x) * size.width, y: CGFloat(area.y) * size.height,
+               width: CGFloat(area.w) * size.width, height: CGFloat(area.h) * size.height)
     }
 
     /// The image as large as fits (small ones at most twice their size).
@@ -175,13 +258,6 @@ struct ImageEditorView: View {
         guard image.width > 0, image.height > 0, box.width > 0, box.height > 0 else { return .zero }
         let scale = min(box.width / image.width, box.height / image.height, 2)
         return CGSize(width: image.width * scale, height: image.height * scale)
-    }
-
-    private func hint(_ key: String, _ label: String) -> some View {
-        HStack(spacing: 4) {
-            Text(key).font(.system(size: 11, weight: .semibold))
-            Text(label).font(.system(size: 11))
-        }
     }
 
     private func load() {
@@ -194,10 +270,10 @@ struct ImageEditorView: View {
         render()
     }
 
-    /// The blurs as they'll be in the file (the same mosaic, at this size).
+    /// The marks and blurs as they'll be in the file (drawn the same way, at this size).
     private func render() {
         guard let base else { return }
-        let blurs = ImageEdits(blurs: draft.edits.blurs)
-        shown = blurs.isEmpty ? base : FileExport.apply(blurs, to: base)
+        let edits = draft.edits.uncropped
+        shown = edits.isEmpty ? base : FileExport.apply(edits, to: base)
     }
 }

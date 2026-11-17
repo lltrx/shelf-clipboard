@@ -176,8 +176,108 @@ enum ExportAction { case paste, copy, save }
 /// The paste box's controls, in Tab order.
 enum ExportField: Equatable { case name, format, size, quality }
 
-/// The image editor's tools: Blur pixelates the area dragged over, Crop keeps only it.
-enum EditTool: Equatable { case blur, crop }
+/// The image editor's tools: Blur pixelates the area dragged over, Crop keeps only it; Arrow, Box,
+/// Highlight and Text draw on the image.
+enum EditTool: Equatable, CaseIterable {
+    case arrow, box, highlight, text, blur, crop
+
+    var title: String {
+        switch self {
+        case .arrow: return "Arrow"
+        case .box: return "Box"
+        case .highlight: return "Highlight"
+        case .text: return "Text"
+        case .blur: return "Blur"
+        case .crop: return "Crop"
+        }
+    }
+
+    /// The letter that picks it (physical key code, so any keyboard layout works).
+    var letter: String {
+        switch self {
+        case .arrow: return "A"
+        case .box: return "R"
+        case .highlight: return "H"
+        case .text: return "T"
+        case .blur: return "B"
+        case .crop: return "C"
+        }
+    }
+
+    var keyCode: UInt16 {
+        switch self {
+        case .arrow: return 0
+        case .box: return 15
+        case .highlight: return 4
+        case .text: return 17
+        case .blur: return 11
+        case .crop: return 8
+        }
+    }
+
+    /// What to do with it, for the editor's bottom line.
+    var instruction: String {
+        switch self {
+        case .arrow: return "Drag from where the arrow starts to what it points at"
+        case .box: return "Drag around something to draw a box"
+        case .highlight: return "Drag over text to highlight it"
+        case .text: return "Click where the text goes, type, then Return"
+        case .blur: return "Drag over what to hide"
+        case .crop: return "Drag around what to keep"
+        }
+    }
+
+    /// Draws in the chosen color (Highlight is always yellow).
+    var usesColor: Bool { self == .arrow || self == .box || self == .text }
+}
+
+/// The colors marks can be drawn in.
+enum MarkColor: String, CaseIterable, Equatable {
+    case red, orange, yellow, green, blue, white, black
+
+    /// sRGB, 0…1.
+    var rgb: (red: Double, green: Double, blue: Double) {
+        switch self {
+        case .red: return (1.0, 0.23, 0.19)
+        case .orange: return (1.0, 0.58, 0.0)
+        case .yellow: return (1.0, 0.84, 0.04)
+        case .green: return (0.2, 0.78, 0.35)
+        case .blue: return (0.0, 0.48, 1.0)
+        case .white: return (1, 1, 1)
+        case .black: return (0, 0, 0)
+        }
+    }
+
+    /// Text gets an outline in the opposite tone, so it reads on any background.
+    var isLight: Bool { self == .white || self == .yellow }
+}
+
+/// A point of an image, as fractions of its width and height from the top left.
+struct EditPoint: Equatable {
+    var x: Double
+    var y: Double
+
+    var clamped: EditPoint { EditPoint(x: min(max(x, 0), 1), y: min(max(y, 0), 1)) }
+
+    func distance(to other: EditPoint) -> Double { ((x - other.x) * (x - other.x) + (y - other.y) * (y - other.y)).squareRoot() }
+}
+
+/// Something drawn on the image: an arrow from `from` to `to`, a box or highlight between them, or
+/// text whose top left is `from`.
+struct ImageMark: Equatable {
+    enum Kind: Equatable { case arrow, box, highlight, text }
+
+    var kind: Kind
+    var from: EditPoint
+    var to: EditPoint
+    var color: MarkColor
+    var text = ""
+
+    /// The area between the two points (boxes and highlights).
+    var rect: EditRect {
+        EditRect(x: min(from.x, to.x), y: min(from.y, to.y), w: abs(to.x - from.x), h: abs(to.y - from.y))
+    }
+}
 
 /// An area of an image, as fractions of its width and height from the top left (0…1), so it holds
 /// at any size.
@@ -205,19 +305,24 @@ extension String {
 struct ImageEdits: Equatable {
     var blurs: [EditRect] = []
     var crop: EditRect?
+    var marks: [ImageMark] = []   // drawn after the blurs, before the crop
 
-    var isEmpty: Bool { blurs.isEmpty && crop == nil }
+    var isEmpty: Bool { blurs.isEmpty && crop == nil && marks.isEmpty }
 
     /// Smaller than this (a click, or a slip of the mouse) isn't an area.
     static let smallest = 0.01
 
-    /// "2 areas hidden, cropped"
+    /// "2 marks, 1 area hidden, cropped"
     var summary: String {
         var parts: [String] = []
+        if !marks.isEmpty { parts.append(marks.count == 1 ? "1 mark" : "\(marks.count) marks") }
         if !blurs.isEmpty { parts.append(blurs.count == 1 ? "1 area hidden" : "\(blurs.count) areas hidden") }
         if crop != nil { parts.append("cropped") }
         return parts.joined(separator: ", ")
     }
+
+    /// What the editor's preview shows: everything but the crop (shown as a frame instead).
+    var uncropped: ImageEdits { ImageEdits(blurs: blurs, crop: nil, marks: marks) }
 }
 
 /// The Copy as File form: what is being made, and the choices so far.
@@ -243,9 +348,11 @@ struct ExportDraft: Equatable {
 
     /// The editor's state: the tool, what to put back on Esc, and the steps Undo goes through.
     struct Editor: Equatable {
-        var tool: EditTool = .blur
+        var tool: EditTool = .arrow
+        var color: MarkColor = .red
         var before: ImageEdits
         var history: [ImageEdits] = []
+        var typing: Int?              // the text mark being typed, as an index into edits.marks
         var canUndo: Bool { !history.isEmpty }
     }
 
@@ -279,25 +386,73 @@ struct ExportDraft: Equatable {
         editor = Editor(before: edits)
     }
 
-    /// An area dragged out with the current tool: Blur adds one, Crop replaces the crop.
+    /// An area dragged out with Blur (adds one) or Crop (replaces the crop).
     mutating func addEdit(_ rect: EditRect) {
-        guard var e = editor, let area = rect.clamped,
+        guard var e = editor, e.tool == .blur || e.tool == .crop, let area = rect.clamped,
               area.w >= ImageEdits.smallest, area.h >= ImageEdits.smallest else { return }
         e.history.append(edits)
+        if e.tool == .blur { edits.blurs.append(area) } else { edits.crop = area }
+        editor = e
+    }
+
+    /// A drag on the image with the current tool, from where the mouse went down to where it came
+    /// up (the same point for a click). Text starts typing at a click.
+    mutating func addDrag(from start: EditPoint, to end: EditPoint) {
+        finishTyping(keep: true)
+        guard var e = editor else { return }
+        let a = start.clamped, b = end.clamped
         switch e.tool {
-        case .blur: edits.blurs.append(area)
-        case .crop: edits.crop = area
+        case .blur, .crop:
+            addEdit(EditRect(x: min(a.x, b.x), y: min(a.y, b.y), w: abs(b.x - a.x), h: abs(b.y - a.y)))
+        case .arrow:
+            guard a.distance(to: b) >= ImageEdits.smallest * 2 else { return }
+            e.history.append(edits)
+            edits.marks.append(ImageMark(kind: .arrow, from: a, to: b, color: e.color))
+            editor = e
+        case .box, .highlight:
+            let mark = ImageMark(kind: e.tool == .box ? .box : .highlight, from: a, to: b,
+                                 color: e.tool == .highlight ? .yellow : e.color)
+            guard mark.rect.w >= ImageEdits.smallest, mark.rect.h >= ImageEdits.smallest else { return }
+            e.history.append(edits)
+            edits.marks.append(mark)
+            editor = e
+        case .text:
+            e.history.append(edits)
+            edits.marks.append(ImageMark(kind: .text, from: b, to: b, color: e.color))
+            e.typing = edits.marks.count - 1
+            editor = e
         }
+    }
+
+    /// The text being typed, as it changes.
+    mutating func typeText(_ text: String) {
+        guard let i = editor?.typing, edits.marks.indices.contains(i) else { return }
+        edits.marks[i].text = text
+    }
+
+    var typedText: String {
+        guard let i = editor?.typing, edits.marks.indices.contains(i) else { return "" }
+        return edits.marks[i].text
+    }
+
+    /// Return keeps the text (unless nothing was typed); Esc takes it away.
+    mutating func finishTyping(keep: Bool) {
+        guard var e = editor, let i = e.typing else { return }
+        e.typing = nil
+        let empty = !edits.marks.indices.contains(i) || edits.marks[i].text.trimmingCharacters(in: .whitespaces).isEmpty
+        if (!keep || empty), let before = e.history.popLast() { edits = before }
         editor = e
     }
 
     mutating func undoEdit() {
+        if editor?.typing != nil { finishTyping(keep: false); return }
         guard let previous = editor?.history.popLast() else { return }
         edits = previous
     }
 
-    /// Clear: no blurs and no crop (Undo brings them back).
+    /// Clear: no marks, blurs or crop (Undo brings them back).
     mutating func clearEdits() {
+        finishTyping(keep: true)
         guard !edits.isEmpty else { return }
         editor?.history.append(edits)
         edits = ImageEdits()
@@ -305,6 +460,7 @@ struct ExportDraft: Equatable {
 
     /// Done keeps the edits; Esc puts back what there was before the editor opened.
     mutating func endEditing(keep: Bool) {
+        finishTyping(keep: true)
         guard let e = editor else { return }
         if !keep { edits = e.before }
         editor = nil

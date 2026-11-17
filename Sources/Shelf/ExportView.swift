@@ -89,14 +89,14 @@ struct ExportView: View {
                 if draft.canEdit {
                     Button { model.actions?.openImageEditor() } label: {
                         HStack(spacing: 5) {
-                            Image(systemName: "crop")
-                            Text("Blur & Crop")
+                            Image(systemName: "pencil.tip.crop.circle")
+                            Text("Markup")
                             Text("⌘E").foregroundStyle(.secondary)
                         }
                         .font(.system(size: 11.5))
                     }
                     .controlSize(.small)
-                    .help("Hide or crop part of the image")
+                    .help("Draw arrows, boxes, highlights and text, hide parts or crop the image")
                     .disabled(draft.busy)
                 }
             }

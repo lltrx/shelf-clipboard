@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import ImageIO
 import UniformTypeIdentifiers
 
@@ -123,13 +124,14 @@ enum FileExport {
     }
 
     /// The image with each blurred area turned into big blocks of its own average colors (a
-    /// mosaic: the original pixels can't be recovered from it, unlike a light blur), then cropped.
-    /// The areas are fractions of the image, so the editor's small preview and the full-size file match.
+    /// mosaic: the original pixels can't be recovered from it, unlike a light blur), the marks
+    /// drawn on it, then cropped. Everything is in fractions of the image, so the editor's small
+    /// preview and the full-size file match.
     static func apply(_ edits: ImageEdits, to image: CGImage) -> CGImage? {
         var out = image
         let width = image.width, height = image.height
         let bounds = CGRect(x: 0, y: 0, width: width, height: height)
-        if !edits.blurs.isEmpty {
+        if !edits.blurs.isEmpty || !edits.marks.isEmpty {
             let rgb = image.colorSpace.flatMap { $0.model == .rgb ? $0 : nil }
             guard let space = rgb ?? CGColorSpace(name: CGColorSpace.sRGB),
                   let context = bitmap(width, height, space), let data = context.data else { return nil }
@@ -171,6 +173,7 @@ enum FileExport {
                     }
                 }
             }
+            draw(edits.marks, in: context, width: Double(width), height: Double(height))
             guard let made = context.makeImage() else { return nil }
             out = made
         }
@@ -182,6 +185,89 @@ enum FileExport {
             out = cropped
         }
         return out
+    }
+
+    /// Arrows, boxes, highlights and text, sized to the image (lines about 0.35% of its longest
+    /// side, text 2.2%), so they look the same in the preview and the file.
+    private static func draw(_ marks: [ImageMark], in context: CGContext, width: Double, height: Double) {
+        guard !marks.isEmpty else { return }
+        let longest = max(width, height)
+        let line = CGFloat(max(2, longest * 0.0035))
+        func color(_ c: MarkColor, alpha: Double = 1) -> CGColor {
+            CGColor(srgbRed: CGFloat(c.rgb.red), green: CGFloat(c.rgb.green), blue: CGFloat(c.rgb.blue), alpha: CGFloat(alpha))
+        }
+        // The context's y runs up from the bottom; marks are measured down from the top.
+        func point(_ p: EditPoint) -> CGPoint { CGPoint(x: CGFloat(p.x * width), y: CGFloat(height - p.y * height)) }
+        let shadow = CGColor(gray: 0, alpha: 0.35)
+
+        for mark in marks {
+            context.saveGState()
+            let a = point(mark.from), b = point(mark.to)
+            let area = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
+            switch mark.kind {
+            case .highlight:
+                context.setBlendMode(.multiply)   // like a marker: dark text stays dark
+                context.setFillColor(color(mark.color, alpha: 0.45))
+                context.fill(area)
+            case .box:
+                context.setShadow(offset: .zero, blur: line, color: shadow)
+                context.setStrokeColor(color(mark.color))
+                context.setLineWidth(line)
+                context.setLineJoin(.round)
+                let r = min(line * 1.5, min(area.width, area.height) / 2)
+                context.addPath(CGPath(roundedRect: area, cornerWidth: r, cornerHeight: r, transform: nil))
+                context.strokePath()
+            case .arrow:
+                context.setShadow(offset: .zero, blur: line, color: shadow)
+                let angle = atan2(b.y - a.y, b.x - a.x)
+                let head: CGFloat = line * 4.5
+                let spread: CGFloat = 0.45
+                let length = ((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y)).squareRoot()
+                let shaftEnd = length > head
+                    ? CGPoint(x: b.x - cos(angle) * head * 0.7, y: b.y - sin(angle) * head * 0.7)
+                    : a
+                context.setStrokeColor(color(mark.color))
+                context.setLineWidth(line)
+                context.setLineCap(.round)
+                context.move(to: a)
+                context.addLine(to: shaftEnd)
+                context.strokePath()
+                context.setFillColor(color(mark.color))
+                context.move(to: b)
+                context.addLine(to: CGPoint(x: b.x - cos(angle - spread) * head, y: b.y - sin(angle - spread) * head))
+                context.addLine(to: CGPoint(x: b.x - cos(angle + spread) * head, y: b.y - sin(angle + spread) * head))
+                context.closePath()
+                context.fillPath()
+            case .text:
+                drawText(mark.text, topLeft: a, size: max(14, longest * 0.022), color: color(mark.color),
+                         outline: mark.color.isLight ? CGColor(gray: 0, alpha: 1) : CGColor(gray: 1, alpha: 1),
+                         maxWidth: max(width - Double(a.x), longest * 0.05), in: context)
+            }
+            context.restoreGState()
+        }
+    }
+
+    /// Bold text with an outline, its top left at `topLeft` (Core Text, so Arabic and other
+    /// scripts lay out right).
+    private static func drawText(_ text: String, topLeft: CGPoint, size: Double, color: CGColor, outline: CGColor,
+                                 maxWidth: Double, in context: CGContext) {
+        guard !text.isEmpty else { return }
+        let points = CGFloat(size)
+        let font = CTFontCreateUIFontForLanguage(.emphasizedSystem, points, nil) ?? CTFontCreateWithName("Helvetica-Bold" as CFString, points, nil)
+        let attributes: [NSAttributedString.Key: Any] = [
+            NSAttributedString.Key(kCTFontAttributeName as String): font,
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String): color,
+            NSAttributedString.Key(kCTStrokeColorAttributeName as String): outline,
+            NSAttributedString.Key(kCTStrokeWidthAttributeName as String): -5.0,   // fill, plus an outline 5% of the size
+        ]
+        let framesetter = CTFramesetterCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+        let fit = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRange(location: 0, length: 0), nil,
+                                                               CGSize(width: CGFloat(maxWidth), height: CGFloat.greatestFiniteMagnitude), nil)
+        let box = CGRect(x: topLeft.x, y: topLeft.y - fit.height.rounded(.up), width: fit.width.rounded(.up) + 2,
+                         height: fit.height.rounded(.up) + 1)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), CGPath(rect: box, transform: nil), nil)
+        context.textMatrix = .identity
+        CTFrameDraw(frame, context)
     }
 
     /// An 8-bit RGBA canvas, in the image's color space if it can have one (else sRGB).

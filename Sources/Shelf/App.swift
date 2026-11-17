@@ -319,18 +319,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         }
     }
 
-    /// Keys in the blur and crop editor. It has no text field, so it takes every key.
+    /// Keys in the image editor. While text is being typed, the text field gets them (Return keeps
+    /// the text, Esc removes it); otherwise the editor takes every key.
     private func handleImageEditorKey(_ e: NSEvent) -> Bool {
         let cmd = e.modifierFlags.contains(.command)
+        if model.exportDraft?.editor?.typing != nil {
+            switch e.keyCode {
+            case 36, 76: model.exportDraft?.finishTyping(keep: true); return true
+            case 53: model.exportDraft?.finishTyping(keep: false); return true
+            default: return false
+            }
+        }
+        let colorKeys: [UInt16] = [18, 19, 20, 21, 23, 22, 26]               // 1…7
         switch e.keyCode {
         case 53: closeImageEditor(keep: false)                              // esc: as it was
         case 36, 76: if !e.isARepeat { closeImageEditor(keep: true) }       // return: done
         case 6 where cmd: model.exportDraft?.undoEdit()                     // ⌘Z
         case 51, 117: model.exportDraft?.clearEdits()                       // ⌫: clear
-        case 11 where !cmd: model.exportDraft?.editor?.tool = .blur         // B
-        case 8 where !cmd: model.exportDraft?.editor?.tool = .crop          // C
         case 14 where cmd: closeImageEditor(keep: true)                     // ⌘E again
-        default: break
+        default:
+            guard !cmd else { break }
+            if let index = colorKeys.firstIndex(of: e.keyCode), MarkColor.allCases.indices.contains(index) {
+                model.exportDraft?.editor?.color = MarkColor.allCases[index]
+            } else if let tool = EditTool.allCases.first(where: { $0.keyCode == e.keyCode }) {
+                model.exportDraft?.editor?.tool = tool                      // A R H T B C
+            }
         }
         return true
     }
@@ -958,7 +971,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         popover.setFrame(NSRect(x: x, y: bottom, width: size.width, height: size.height), display: true)
     }
 
-    /// ⌘E or Blur & Crop in the paste box: the box grows to show the image.
+    /// ⌘E or Markup in the paste box: the box grows to show the image.
     func openImageEditor() {
         guard var draft = model.exportDraft, draft.canEdit, !draft.busy, draft.editor == nil else { return }
         draft.beginEditing()

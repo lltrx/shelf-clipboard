@@ -216,6 +216,8 @@ final class ExportNamingTests: XCTestCase {
         XCTAssertTrue(d.edits.isEmpty)
 
         d.beginEditing()
+        XCTAssertEqual(d.editor?.tool, .arrow)                      // the editor opens on Arrow
+        d.editor?.tool = .blur
         d.addEdit(EditRect(x: 0.1, y: 0.1, w: 0.2, h: 0.1))
         d.addEdit(EditRect(x: 0.5, y: 0.5, w: 0.004, h: 0.3))       // a click: ignored
         d.addEdit(EditRect(x: 0.6, y: 0.6, w: 0.2, h: 0.2))
@@ -238,6 +240,48 @@ final class ExportNamingTests: XCTestCase {
         d.addEdit(EditRect(x: 0.2, y: 0.2, w: 0.3, h: 0.3))
         d.endEditing(keep: false)
         XCTAssertEqual(d.edits.blurs.count, 2)
+    }
+
+    func testMarksAndText() {
+        var d = draft(["shot.png"], [true], .png, formats: [.png, .jpeg])
+        d.beginEditing()
+        d.addDrag(from: EditPoint(x: 0.1, y: 0.1), to: EditPoint(x: 0.4, y: 0.3))              // an arrow
+        d.addDrag(from: EditPoint(x: 0.5, y: 0.5), to: EditPoint(x: 0.5, y: 0.505))            // too short
+        XCTAssertEqual(d.edits.marks.count, 1)
+        XCTAssertEqual(d.edits.marks[0].kind, .arrow)
+        XCTAssertEqual(d.edits.marks[0].color, .red)
+
+        d.editor?.tool = .highlight
+        d.editor?.color = .blue                                                                // ignored: always yellow
+        d.addDrag(from: EditPoint(x: 0.75, y: 0.25), to: EditPoint(x: 0.25, y: 0.375))
+        XCTAssertEqual(d.edits.marks[1].color, .yellow)
+        XCTAssertEqual(d.edits.marks[1].rect, EditRect(x: 0.25, y: 0.25, w: 0.5, h: 0.125))
+
+        d.editor?.tool = .box
+        d.addDrag(from: EditPoint(x: -0.5, y: 0.875), to: EditPoint(x: 0.25, y: 1.5))          // kept inside the image
+        XCTAssertEqual(d.edits.marks[2].rect, EditRect(x: 0, y: 0.875, w: 0.25, h: 0.125))
+        XCTAssertEqual(d.edits.marks[2].color, .blue)
+        XCTAssertEqual(d.edits.summary, "3 marks")
+
+        d.editor?.tool = .text
+        d.addDrag(from: EditPoint(x: 0.3, y: 0.3), to: EditPoint(x: 0.3, y: 0.3))              // a click
+        XCTAssertEqual(d.editor?.typing, 3)
+        d.typeText("Look here")
+        XCTAssertEqual(d.typedText, "Look here")
+        d.finishTyping(keep: true)
+        XCTAssertNil(d.editor?.typing)
+        XCTAssertEqual(d.edits.marks.last?.text, "Look here")
+
+        d.addDrag(from: EditPoint(x: 0.7, y: 0.7), to: EditPoint(x: 0.7, y: 0.7))
+        d.finishTyping(keep: true)                                                             // nothing typed: gone
+        XCTAssertEqual(d.edits.marks.count, 4)
+        d.addDrag(from: EditPoint(x: 0.7, y: 0.7), to: EditPoint(x: 0.7, y: 0.7))
+        d.typeText("oops")
+        d.undoEdit()                                                                           // ⌘Z while typing
+        XCTAssertEqual(d.edits.marks.count, 4)
+        d.undoEdit()                                                                           // then the text before
+        XCTAssertEqual(d.edits.marks.count, 3)
+        XCTAssertFalse(d.pastesOriginal)
     }
 
     func testFormatExtensions() {

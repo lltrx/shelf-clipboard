@@ -78,4 +78,42 @@ final class ImageEditTests: XCTestCase {
         XCTAssertEqual(out.width, 50)    // half of 200, then half of that
         XCTAssertEqual(out.height, 50)
     }
+
+    /// White all over.
+    private func blank(_ width: Int, _ height: Int) throws -> CGImage {
+        let c = try canvas(width, height)
+        c.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
+        c.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return try XCTUnwrap(c.makeImage())
+    }
+
+    func testBoxAndArrowAreDrawnWhereTheyWereDragged() throws {
+        let image = try blank(400, 200)
+        let box = ImageMark(kind: .box, from: EditPoint(x: 0.25, y: 0.25), to: EditPoint(x: 0.75, y: 0.75), color: .red)
+        let arrow = ImageMark(kind: .arrow, from: EditPoint(x: 0.05, y: 0.9), to: EditPoint(x: 0.45, y: 0.9), color: .blue)
+        let edited = try XCTUnwrap(FileExport.apply(ImageEdits(marks: [box, arrow]), to: image))
+        let edge = try pixel(edited, 200, 50)            // the box's top edge, 25% down
+        XCTAssertGreaterThan(edge.0, 200)
+        XCTAssertLessThan(edge.1, 140)                   // red, not white
+        XCTAssertEqual(try pixel(edited, 200, 100).1, 255)   // inside the box: untouched
+        let shaft = try pixel(edited, 100, 180)          // the arrow, 90% down
+        XCTAssertGreaterThan(shaft.2, 180)
+        XCTAssertLessThan(shaft.0, 120)                  // blue
+        XCTAssertEqual(try pixel(edited, 390, 10).0, 255)    // far from both: untouched
+    }
+
+    func testHighlightTintsAndTextIsDrawn() throws {
+        let image = try blank(400, 200)
+        let highlight = ImageMark(kind: .highlight, from: EditPoint(x: 0, y: 0), to: EditPoint(x: 0.5, y: 0.25), color: .yellow)
+        let text = ImageMark(kind: .text, from: EditPoint(x: 0.1, y: 0.5), to: EditPoint(x: 0.1, y: 0.5), color: .black, text: "Shelf")
+        let edited = try XCTUnwrap(FileExport.apply(ImageEdits(marks: [highlight, text]), to: image))
+        let tinted = try pixel(edited, 20, 20)
+        XCTAssertGreaterThan(tinted.0, 200)
+        XCTAssertLessThan(tinted.2, 200)                 // yellowish: blue taken out
+        // Some dark pixels just below and right of where the text starts.
+        var dark = 0
+        for y in 102..<118 { for x in 42..<120 where try pixel(edited, x, y).0 < 100 { dark += 1 } }
+        XCTAssertGreaterThan(dark, 10)
+    }
 }
+
