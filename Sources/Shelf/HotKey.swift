@@ -1,25 +1,45 @@
 import Carbon
 
-/// Global shortcut via Carbon's RegisterEventHotKey (needs no Accessibility permission).
+/// A global shortcut via Carbon's RegisterEventHotKey (needs no Accessibility permission). Several
+/// can be registered at once (open the shelf, paste the previous copy); one event handler, installed
+/// once, calls the right one by id. Releasing a HotKey unregisters it, so Settings can change them live.
 final class HotKey {
-    private static var handler: (() -> Void)?
+    private static var handlers: [UInt32: () -> Void] = [:]
+    private static var installed = false
+    private static var nextID: UInt32 = 1
+
     private var ref: EventHotKeyRef?
-    let display: String
+    private let id: UInt32
+    let display: String   // "⇧⌘V"
 
-    /// Spec like "cmd+option+v". Falls back to ⇧⌘V if it cannot be parsed.
+    /// Spec like "cmd+option+v". Nil if it can't be parsed or another app already has the shortcut.
     init?(spec: String, handler: @escaping () -> Void) {
-        guard let (code, mods, display) = HotKey.parse(spec) ?? HotKey.parse("cmd+shift+v") else { return nil }
+        guard let (code, mods, display) = HotKey.parse(spec) else { return nil }
         self.display = display
-        HotKey.handler = handler
+        id = HotKey.nextID
+        HotKey.nextID += 1
+        HotKey.installHandler()
+        let hotKeyID = EventHotKeyID(signature: OSType(0x5348_4C46), id: id)   // "SHLF"
+        guard RegisterEventHotKey(code, mods, hotKeyID, GetApplicationEventTarget(), 0, &ref) == noErr else { return nil }
+        HotKey.handlers[id] = handler
+    }
 
+    deinit {
+        if let ref { UnregisterEventHotKey(ref) }
+        HotKey.handlers[id] = nil
+    }
+
+    private static func installHandler() {
+        guard !installed else { return }
+        installed = true
         var event = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
-            HotKey.handler?()
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
+            var hotKeyID = EventHotKeyID()
+            let status = GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                                           nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID)
+            if status == noErr { HotKey.handlers[hotKeyID.id]?() }
             return noErr
         }, 1, &event, nil, nil)
-
-        let id = EventHotKeyID(signature: OSType(0x5348_4C46), id: 1) // "SHLF"
-        guard RegisterEventHotKey(code, mods, id, GetApplicationEventTarget(), 0, &ref) == noErr else { return nil }
     }
 
     private static let keyCodes: [String: UInt32] = [
@@ -28,6 +48,16 @@ final class HotKey {
         "6": 22, "5": 23, "9": 25, "7": 26, "8": 28, "0": 29, "o": 31, "u": 32, "i": 34, "p": 35,
         "l": 37, "j": 38, "k": 40, "n": 45, "m": 46, "space": 49,
     ]
+
+    /// The spec's name for a physical key ("v", "space"), or nil if shortcuts can't use it.
+    static func keyName(for code: UInt16) -> String? {
+        keyCodes.first { $0.value == UInt32(code) }?.key
+    }
+
+    static func isValid(_ spec: String) -> Bool { parse(spec) != nil }
+
+    /// "⇧⌘V" for "cmd+shift+v", or nil if it isn't a usable shortcut.
+    static func display(_ spec: String) -> String? { parse(spec)?.2 }
 
     private static func parse(_ spec: String) -> (UInt32, UInt32, String)? {
         var mods: UInt32 = 0

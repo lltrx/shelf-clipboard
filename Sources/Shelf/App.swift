@@ -74,7 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     private let panel = ShelfPanel()
     private let preview = ShelfPanel()
     private let popover = ShelfPanel()   // the paste box, just above the selected card
-    private var hotKey: HotKey?
+    private var hotKey: HotKey?          // opens the shelf (⇧⌘V)
+    private var previousHotKey: HotKey?  // pastes the copy before the current one (⌥⇧⌘V)
     private var statusItem: NSStatusItem!
     private var keyMonitor: Any?
     private var flagsMonitor: Any?
@@ -112,8 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         setUpPanels()
         setUpStatusItem()
 
-        let spec = UserDefaults.standard.string(forKey: "hotkey") ?? "cmd+shift+v"
-        hotKey = HotKey(spec: spec) { [unowned self] in toggle() }
+        registerHotKeys()
 
         monitor.onCapture = { [unowned self] capture in
             if stackActive { endStack() } // you copied something new; the stack is over
@@ -317,6 +317,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
     private func toggle() {
         shelfOpen ? hide() : show()
+    }
+
+    /// The global shortcuts, from settings. Called again when Settings changes one.
+    func registerHotKeys() {
+        hotKey = nil            // releasing a HotKey unregisters it, so the same keys can be taken again
+        previousHotKey = nil
+        let open = UserDefaults.standard.string(forKey: "hotkey") ?? "cmd+shift+v"
+        hotKey = HotKey(spec: HotKey.isValid(open) ? open : "cmd+shift+v") { [unowned self] in toggle() }
+        let previous = UserDefaults.standard.string(forKey: "pastePreviousHotkey") ?? "cmd+option+shift+v"
+        if HotKey.isValid(previous) {
+            previousHotKey = HotKey(spec: previous) { [unowned self] in pastePrevious() }
+        }
+    }
+
+    /// ⌥⇧⌘V anywhere: pastes the copy before the current one, without opening the shelf. Pressing
+    /// it again swaps back, since the one just pasted is now the newest.
+    private func pastePrevious() {
+        let items = store.all()
+        guard items.count > 1 else { NSSound.beep(); return }
+        let bundle = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let plain = bundle.flatMap { appStyles[$0] } ?? model.plainEverywhere
+        paste(items[1], plain: plain)
     }
 
     private func show() {
@@ -607,6 +629,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     }
 
     func paste(_ item: ClipItem, plain: Bool) {
+        // A pinned snippet with {{date}}, {{clipboard}}… is filled in and pasted as plain text.
+        if item.pinned, item.kind == .text || item.kind == .link, let text = item.text, Snippet.hasPlaceholders(text) {
+            pasteText(Snippet.expand(text, clipboard: NSPasteboard.general.string(forType: .string)), from: item)
+            return
+        }
         if item.concealed {           // the password is already on the clipboard; just paste it
             hide(animated: false)
             postPaste()
