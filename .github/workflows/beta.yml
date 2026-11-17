@@ -67,9 +67,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # What's new: the Unreleased section of the changelog, or, when it's empty, the section of the
+          # version this is a beta of (2.0.0 for 2.0.0-beta.3).
+          section() { awk -v h="## [$1]" 'index($0, h) == 1 { on = 1; next } on && /^## \[/ { exit } on { print }' CHANGELOG.md; }
+          CHANGES=$(section Unreleased)
+          if [ -z "$(printf '%s' "$CHANGES" | tr -d '[:space:]')" ]; then CHANGES=$(section "${VERSION%%-*}"); fi
           {
-            # What's new: the Unreleased section of the changelog.
-            awk 'index($0, "## [Unreleased]") == 1 { on = 1; next } on && /^## \[/ { exit } on { print }' CHANGELOG.md
+            printf '%s\n' "$CHANGES"
             cat <<EOF
 
           ---
