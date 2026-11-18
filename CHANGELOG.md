@@ -6,7 +6,7 @@ All notable changes to Shelf are documented here. The format is based on
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-11-17
+## [2.0.0] - 2026-11-18
 
 Shelf 2.0 is about what happens between copying and pasting: choose how each paste lands, change images
 and files on the way, grab text from anywhere on screen, and let secrets clean themselves up.
