@@ -14,6 +14,7 @@ protocol ShelfActions: AnyObject {
     func togglePreview()
     func edit(_ item: ClipItem)
     func startExport(_ item: ClipItem)
+    func markup(_ item: ClipItem)
     func finishExport(_ action: ExportAction)
     func cancelExport()
     func openImageEditor()
@@ -250,7 +251,7 @@ struct ShelfView: View {
     private var hints: [Hint] {
         if model.commandHeld {
             return [Hint("⌘1–9", "Paste"), Hint("⌘K", "Paste As…"), Hint("⌘R", "Copy as File…"), Hint("⌘C", "Copy"),
-                    Hint("⌘P", "Pin"), Hint("⌘S", "Mark"), Hint("⌘E", "Edit"), Hint("⌘⌫", "Delete"), Hint("⌘Z", "Undo")]
+                    Hint("⌘P", "Pin"), Hint("⌘S", "Mark"), Hint("⌘E", "Edit · Markup"), Hint("⌘⌫", "Delete"), Hint("⌘Z", "Undo")]
         }
         if !model.stack.isEmpty {
             return [Hint("↩", "Paste \(model.stack.count) in order"), Hint("⌥↩", "All at once"), Hint("⌘J", "Join"),
@@ -270,6 +271,7 @@ struct ShelfView: View {
             hints.append(Hint("↩", "Paste"))
         }
         hints.append(Hint("⌘K", "Paste As…"))
+        if item.canMarkup { hints.append(Hint("⌘E", "Markup")) }
         if isFileLike && !model.askBeforePasting { hints.append(Hint("⌘R", "Copy as File…")) }
         if model.query.isEmpty { hints.append(Hint("Space", "Preview")) }
         hints.append(Hint("↑↓", "Filter"))
@@ -433,6 +435,9 @@ struct ShelfView: View {
         if item.editable {
             Button("Edit…") { model.selection = index; model.actions?.edit(item) }
         }
+        if item.canMarkup {
+            Button("Markup…") { model.selection = index; model.actions?.markup(item) }
+        }
         Button(model.stack.contains(item.id) ? "Remove from Paste Stack" : "Add to Paste Stack") { model.toggleStack(item) }
         Divider()
         Menu("Pin to") {
@@ -519,6 +524,13 @@ extension ClipKind {
 }
 
 extension ClipItem {
+    /// An image, or a single image file: ⌘E opens it in Markup.
+    var canMarkup: Bool {
+        guard !concealed else { return false }
+        if kind == .image { return true }
+        return kind == .file && filePaths.count == 1 && FileExport.isImage(filePaths[0])
+    }
+
     /// Can be dragged into other apps by SwiftUI, which carries one item. A card with several files
     /// (and several marked cards) is dragged by the shelf's panel instead.
     var draggable: Bool { !concealed && !(kind == .file && filePaths.count > 1) }

@@ -174,7 +174,14 @@ enum ExportNaming {
 enum ExportAction { case paste, copy, save }
 
 /// The paste box's controls, in Tab order.
-enum ExportField: Equatable { case name, format, size, quality }
+enum ExportField: Equatable { case name, format, size, quality, markup }
+
+/// What's selected in the image editor, to move, resize, recolor or delete with the keyboard.
+enum EditSelection: Equatable {
+    case mark(Int)   // an index into edits.marks
+    case blur(Int)   // an index into edits.blurs
+    case crop
+}
 
 /// The image editor's tools: Blur pixelates the area dragged over, Crop keeps only it; Arrow, Box,
 /// Highlight and Text draw on the image.
@@ -353,8 +360,12 @@ struct ExportDraft: Equatable {
         var before: ImageEdits
         var history: [ImageEdits] = []
         var typing: Int?              // the text mark being typed, as an index into edits.marks
+        var selected: EditSelection?
+        var nudging = false           // in a run of arrow-key moves, which Undo takes back as one step
         var canUndo: Bool { !history.isEmpty }
     }
+
+    var openedForMarkup = false       // ⌘E on a card: Esc in the editor closes the whole box
 
     static let qualities: [Double] = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]
     static let scales: [Double] = [1, 0.75, 0.5, 0.25]
@@ -391,16 +402,37 @@ struct ExportDraft: Equatable {
         guard var e = editor, e.tool == .blur || e.tool == .crop, let area = rect.clamped,
               area.w >= ImageEdits.smallest, area.h >= ImageEdits.smallest else { return }
         e.history.append(edits)
-        if e.tool == .blur { edits.blurs.append(area) } else { edits.crop = area }
+        if e.tool == .blur {
+            edits.blurs.append(area)
+            e.selected = .blur(edits.blurs.count - 1)
+        } else {
+            edits.crop = area
+            e.selected = .crop
+        }
+        e.nudging = false
         editor = e
     }
 
     /// A drag on the image with the current tool, from where the mouse went down to where it came
     /// up (the same point for a click). Text starts typing at a click.
-    mutating func addDrag(from start: EditPoint, to end: EditPoint) {
+    mutating func addDrag(from start: EditPoint, to end: EditPoint, aspect: Double = 1) {
         finishTyping(keep: true)
         guard var e = editor else { return }
         let a = start.clamped, b = end.clamped
+        e.nudging = false
+        // A click on something already there selects it (so the arrow keys can move it); a click on
+        // nothing lets go of the selection, or, with Text, starts typing there. (With Text, only
+        // other text is picked by a click, so text can go on top of a highlight or a box.)
+        if a.distance(to: b) < ImageEdits.smallest / 2 {
+            if let hit = item(at: b, aspect: aspect), e.tool != .text || isText(hit) {
+                e.selected = hit
+                editor = e
+                return
+            }
+            e.selected = nil
+            editor = e
+            if e.tool != .text { return }
+        }
         switch e.tool {
         case .blur, .crop:
             addEdit(EditRect(x: min(a.x, b.x), y: min(a.y, b.y), w: abs(b.x - a.x), h: abs(b.y - a.y)))
@@ -408,6 +440,7 @@ struct ExportDraft: Equatable {
             guard a.distance(to: b) >= ImageEdits.smallest * 2 else { return }
             e.history.append(edits)
             edits.marks.append(ImageMark(kind: .arrow, from: a, to: b, color: e.color))
+            e.selected = .mark(edits.marks.count - 1)
             editor = e
         case .box, .highlight:
             let mark = ImageMark(kind: e.tool == .box ? .box : .highlight, from: a, to: b,
@@ -415,11 +448,13 @@ struct ExportDraft: Equatable {
             guard mark.rect.w >= ImageEdits.smallest, mark.rect.h >= ImageEdits.smallest else { return }
             e.history.append(edits)
             edits.marks.append(mark)
+            e.selected = .mark(edits.marks.count - 1)
             editor = e
         case .text:
             e.history.append(edits)
             edits.marks.append(ImageMark(kind: .text, from: b, to: b, color: e.color))
             e.typing = edits.marks.count - 1
+            e.selected = .mark(edits.marks.count - 1)
             editor = e
         }
     }
@@ -440,7 +475,11 @@ struct ExportDraft: Equatable {
         guard var e = editor, let i = e.typing else { return }
         e.typing = nil
         let empty = !edits.marks.indices.contains(i) || edits.marks[i].text.trimmingCharacters(in: .whitespaces).isEmpty
-        if (!keep || empty), let before = e.history.popLast() { edits = before }
+        if (!keep || empty), let before = e.history.popLast() {
+            edits = before
+            if case .mark(let s)? = e.selected, !edits.marks.indices.contains(s) { e.selected = nil }   // the text is gone
+        }
+        e.nudging = false
         editor = e
     }
 
@@ -448,6 +487,244 @@ struct ExportDraft: Equatable {
         if editor?.typing != nil { finishTyping(keep: false); return }
         guard let previous = editor?.history.popLast() else { return }
         edits = previous
+        editor?.selected = nil
+        editor?.nudging = false
+    }
+
+    // MARK: Markup with the keyboard
+
+    /// A tool picked (by its letter or its button). Whatever was selected is let go.
+    mutating func setTool(_ tool: EditTool) {
+        finishTyping(keep: true)
+        editor?.tool = tool
+        editor?.selected = nil
+        editor?.nudging = false
+    }
+
+    /// A color picked (1–7, or a swatch). A selected arrow, box or text takes it too.
+    mutating func setColor(_ color: MarkColor) {
+        guard var e = editor else { return }
+        e.color = color
+        if case .mark(let i)? = e.selected, edits.marks.indices.contains(i),
+           edits.marks[i].kind != .highlight, edits.marks[i].color != color {
+            e.history.append(edits)
+            e.nudging = false
+            edits.marks[i].color = color
+        }
+        editor = e
+    }
+
+    /// Everything that can be selected, in Tab order: marks as drawn, then blurred areas, then the crop.
+    var selectables: [EditSelection] {
+        edits.marks.indices.map { .mark($0) } + edits.blurs.indices.map { .blur($0) } + (edits.crop == nil ? [] : [.crop])
+    }
+
+    mutating func select(_ selection: EditSelection?) {
+        finishTyping(keep: true)
+        let all = selectables
+        editor?.selected = selection.flatMap { all.contains($0) ? $0 : nil }
+        editor?.nudging = false
+    }
+
+    /// Tab (⇧Tab): the next (previous) item, wrapping around.
+    mutating func selectNext(backward: Bool = false) {
+        finishTyping(keep: true)
+        let all = selectables
+        guard editor != nil, !all.isEmpty else { return }
+        if let current = editor?.selected, let i = all.firstIndex(of: current) {
+            editor?.selected = all[(i + (backward ? -1 : 1) + all.count) % all.count]
+        } else {
+            editor?.selected = backward ? all[all.count - 1] : all[0]
+        }
+        editor?.nudging = false
+    }
+
+    /// Space: one of the current tool's marks in the middle of the image, selected, ready for the
+    /// arrow keys. With Text, typing starts.
+    mutating func addInMiddle() {
+        finishTyping(keep: true)
+        guard var e = editor else { return }
+        e.history.append(edits)
+        e.nudging = false
+        func mark(_ kind: ImageMark.Kind, _ from: (Double, Double), _ to: (Double, Double), _ color: MarkColor) {
+            edits.marks.append(ImageMark(kind: kind, from: EditPoint(x: from.0, y: from.1), to: EditPoint(x: to.0, y: to.1), color: color))
+            e.selected = .mark(edits.marks.count - 1)
+        }
+        switch e.tool {
+        case .arrow: mark(.arrow, (0.35, 0.65), (0.5, 0.5), e.color)
+        case .box: mark(.box, (0.35, 0.35), (0.65, 0.65), e.color)
+        case .highlight: mark(.highlight, (0.3, 0.47), (0.7, 0.53), .yellow)
+        case .text:
+            mark(.text, (0.4, 0.45), (0.4, 0.45), e.color)
+            e.typing = edits.marks.count - 1
+        case .blur:
+            edits.blurs.append(EditRect(x: 0.35, y: 0.45, w: 0.3, h: 0.1))
+            e.selected = .blur(edits.blurs.count - 1)
+        case .crop:
+            edits.crop = EditRect(x: 0.1, y: 0.1, w: 0.8, h: 0.8)
+            e.selected = .crop
+        }
+        editor = e
+    }
+
+    /// Return on a selected text: type to change it (Return keeps it, Esc puts the old text back).
+    /// False when no text is selected.
+    mutating func editSelectedText() -> Bool {
+        guard var e = editor, e.typing == nil, case .mark(let i)? = e.selected,
+              edits.marks.indices.contains(i), edits.marks[i].kind == .text else { return false }
+        e.history.append(edits)
+        e.typing = i
+        e.nudging = false
+        editor = e
+        return true
+    }
+
+    /// The arrow keys: moves the selected item, keeping it inside the image. A run of moves (and
+    /// resizes) is one Undo step.
+    mutating func moveSelected(dx: Double, dy: Double) {
+        guard var e = editor, let selection = e.selected else { return }
+        func fit(_ d: Double, _ values: [Double]) -> Double { min(max(d, -(values.min() ?? 0)), 1 - (values.max() ?? 1)) }
+        func moved(_ r: EditRect) -> EditRect {
+            EditRect(x: r.x + fit(dx, [r.x, r.x + r.w]), y: r.y + fit(dy, [r.y, r.y + r.h]), w: r.w, h: r.h)
+        }
+        let before = edits
+        switch selection {
+        case .mark(let i) where edits.marks.indices.contains(i):
+            var m = edits.marks[i]
+            let mx = fit(dx, [m.from.x, m.to.x]), my = fit(dy, [m.from.y, m.to.y])
+            m.from = EditPoint(x: m.from.x + mx, y: m.from.y + my)
+            m.to = EditPoint(x: m.to.x + mx, y: m.to.y + my)
+            edits.marks[i] = m
+        case .blur(let i) where edits.blurs.indices.contains(i):
+            edits.blurs[i] = moved(edits.blurs[i])
+        case .crop:
+            if let crop = edits.crop { edits.crop = moved(crop) }
+        default:
+            e.selected = nil
+        }
+        if edits != before, !e.nudging {
+            e.history.append(before)
+            e.nudging = true
+        }
+        editor = e
+    }
+
+    /// ⌥ and the arrow keys: a box, highlight, blur or crop grows or shrinks from its bottom right
+    /// corner; an arrow's head moves. Text keeps its size.
+    mutating func resizeSelected(dw: Double, dh: Double) {
+        guard var e = editor, let selection = e.selected else { return }
+        func resized(_ r: EditRect) -> EditRect {
+            let smallest = ImageEdits.smallest * 2
+            return EditRect(x: r.x, y: r.y, w: min(max(r.w + dw, smallest), 1 - r.x), h: min(max(r.h + dh, smallest), 1 - r.y))
+        }
+        let before = edits
+        switch selection {
+        case .mark(let i) where edits.marks.indices.contains(i):
+            var m = edits.marks[i]
+            switch m.kind {
+            case .arrow:
+                m.to = EditPoint(x: m.to.x + dw, y: m.to.y + dh).clamped
+            case .box, .highlight:
+                let r = resized(m.rect)
+                m.from = EditPoint(x: r.x, y: r.y)
+                m.to = EditPoint(x: r.x + r.w, y: r.y + r.h)
+            case .text:
+                break
+            }
+            edits.marks[i] = m
+        case .blur(let i) where edits.blurs.indices.contains(i):
+            edits.blurs[i] = resized(edits.blurs[i])
+        case .crop:
+            if let crop = edits.crop { edits.crop = resized(crop) }
+        default:
+            e.selected = nil
+        }
+        if edits != before, !e.nudging {
+            e.history.append(before)
+            e.nudging = true
+        }
+        editor = e
+    }
+
+    /// ⌫: deletes the selected item; with nothing selected, clears everything. Undo brings it back.
+    mutating func deleteSelected() {
+        guard var e = editor else { return }
+        guard let selection = e.selected else {
+            clearEdits()
+            return
+        }
+        e.history.append(edits)
+        e.selected = nil
+        e.nudging = false
+        switch selection {
+        case .mark(let i) where edits.marks.indices.contains(i): edits.marks.remove(at: i)
+        case .blur(let i) where edits.blurs.indices.contains(i): edits.blurs.remove(at: i)
+        case .crop: edits.crop = nil
+        default: e.history.removeLast()   // nothing there
+        }
+        editor = e
+    }
+
+    /// The area an item covers (an arrow's two ends; text measured roughly: about 0.6 of its size per
+    /// character), for its selection frame and for clicking on it. `aspect` is the image's width
+    /// divided by its height.
+    func bounds(of selection: EditSelection, aspect: Double) -> EditRect? {
+        switch selection {
+        case .mark(let i):
+            guard edits.marks.indices.contains(i) else { return nil }
+            let m = edits.marks[i]
+            if m.kind == .text {
+                // Text is 2.2% of the image's longest side.
+                let size = 0.022, a = max(aspect, 0.0001)
+                let lines = m.text.split(separator: "\n", omittingEmptySubsequences: false)
+                let longest = Double(lines.map(\.count).max() ?? 1)
+                let w = max(longest, 1) * 0.6 * size * max(1, 1 / a)
+                let h = Double(max(lines.count, 1)) * 1.25 * size * max(a, 1)
+                return EditRect(x: m.from.x, y: m.from.y, w: w, h: h)
+            }
+            return m.rect
+        case .blur(let i):
+            return edits.blurs.indices.contains(i) ? edits.blurs[i] : nil
+        case .crop:
+            return edits.crop
+        }
+    }
+
+    private func isText(_ selection: EditSelection) -> Bool {
+        if case .mark(let i) = selection, edits.marks.indices.contains(i) { return edits.marks[i].kind == .text }
+        return false
+    }
+
+    /// The item under a point (the one drawn last first), for clicking to select it. Boxes, blurs
+    /// and the crop are picked by their edges, so clicking inside a big one still reaches what's in it.
+    func item(at p: EditPoint, aspect: Double) -> EditSelection? {
+        let near = 0.02
+        func onEdge(_ r: EditRect) -> Bool {
+            let inside = p.x >= r.x - near && p.x <= r.x + r.w + near && p.y >= r.y - near && p.y <= r.y + r.h + near
+            let deep = p.x > r.x + near && p.x < r.x + r.w - near && p.y > r.y + near && p.y < r.y + r.h - near
+            return inside && !deep
+        }
+        func within(_ r: EditRect) -> Bool {
+            p.x >= r.x - near && p.x <= r.x + r.w + near && p.y >= r.y - near && p.y <= r.y + r.h + near
+        }
+        for i in edits.marks.indices.reversed() {
+            let m = edits.marks[i]
+            switch m.kind {
+            case .arrow:
+                let dx = m.to.x - m.from.x, dy = m.to.y - m.from.y
+                let t = max(0, min(1, ((p.x - m.from.x) * dx + (p.y - m.from.y) * dy) / max(dx * dx + dy * dy, 1e-9)))
+                if p.distance(to: EditPoint(x: m.from.x + t * dx, y: m.from.y + t * dy)) <= near { return .mark(i) }
+            case .box:
+                if onEdge(m.rect) { return .mark(i) }
+            case .highlight:
+                if within(m.rect) { return .mark(i) }
+            case .text:
+                if let r = bounds(of: .mark(i), aspect: aspect), within(r) { return .mark(i) }
+            }
+        }
+        for i in edits.blurs.indices.reversed() where within(edits.blurs[i]) { return .blur(i) }
+        if let crop = edits.crop, onEdge(crop) { return .crop }
+        return nil
     }
 
     /// Clear: no marks, blurs or crop (Undo brings them back).
@@ -455,6 +732,8 @@ struct ExportDraft: Equatable {
         finishTyping(keep: true)
         guard !edits.isEmpty else { return }
         editor?.history.append(edits)
+        editor?.selected = nil
+        editor?.nudging = false
         edits = ImageEdits()
     }
 
@@ -476,6 +755,7 @@ struct ExportDraft: Equatable {
         if formats.count > 1 { fields.append(.format) }
         if showsImageOptions { fields.append(.size) }
         if showsImageOptions && format.isLossy { fields.append(.quality) }
+        if canEdit { fields.append(.markup) }
         return fields
     }
 
@@ -495,7 +775,7 @@ struct ExportDraft: Equatable {
         }
         let forward = arrow == .right || arrow == .down
         switch field {
-        case .name:
+        case .name, .markup:
             break
         case .format:
             format = step(formats, format, forward ? 1 : -1)

@@ -292,7 +292,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         case 1:                                                             // S: add to stack, move on
             if let item = model.selected { model.toggleStack(item); model.move(1) }
             return true
-        case 14: model.selected.map(edit); return true                      // E
+        case 14:                                                            // E: Markup (images), Edit (text)
+            if let item = model.selected { item.canMarkup ? markup(item) : edit(item) }
+            return true
         case let k where digitKeys.contains(k):
             let list = model.filtered
             let i = digitKeys.firstIndex(of: k)!
@@ -323,6 +325,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         case 53: cancelExport(); return true                                // esc
         case 36, 76:                                                        // return
             if e.isARepeat { return true }   // Return held down: the repeat isn't a second Return
+            if model.exportFocus == .markup && !e.modifierFlags.contains(.shift) {
+                openImageEditor()                                           // on Markup (Tab): open it
+                return true
+            }
             if e.modifierFlags.contains(.shift), let draft = model.exportDraft, draft.source != .text {
                 paste(draft.item, plain: false)                             // ⇧Return: the original
             } else {
@@ -368,18 +374,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             }
         }
         let colorKeys: [UInt16] = [18, 19, 20, 21, 23, 22, 26]               // 1…7
+        let selected = model.exportDraft?.editor?.selected != nil
+        let option = e.modifierFlags.contains(.option)
+        let step = e.modifierFlags.contains(.shift) ? 0.05 : 0.01           // ⇧: bigger steps
         switch e.keyCode {
-        case 53: closeImageEditor(keep: false)                              // esc: as it was
-        case 36, 76: if !e.isARepeat { closeImageEditor(keep: true) }       // return: done
+        case 53:                                                            // esc: let go, then as it was
+            if selected { model.exportDraft?.select(nil) } else { closeImageEditor(keep: false) }
+        case 36, 76:                                                        // return: change the text, or done
+            guard !e.isARepeat else { break }
+            if model.exportDraft?.editSelectedText() != true { closeImageEditor(keep: true) }
+        case 49 where !cmd: model.exportDraft?.addInMiddle()                // space: add one in the middle
+        case 48: model.exportDraft?.selectNext(backward: e.modifierFlags.contains(.shift))   // tab: next item
+        case 123, 124, 125, 126:                                            // arrows: move (⌥: resize)
+            guard !cmd else { break }   // (a `where` here would only guard the last key code)
+            let (dx, dy): (Double, Double)
+            switch e.keyCode {
+            case 123: (dx, dy) = (-step, 0)
+            case 124: (dx, dy) = (step, 0)
+            case 125: (dx, dy) = (0, step)
+            default: (dx, dy) = (0, -step)
+            }
+            if option { model.exportDraft?.resizeSelected(dw: dx, dh: dy) } else { model.exportDraft?.moveSelected(dx: dx, dy: dy) }
         case 6 where cmd: model.exportDraft?.undoEdit()                     // ⌘Z
-        case 51, 117: model.exportDraft?.clearEdits()                       // ⌫: clear
+        case 51, 117: model.exportDraft?.deleteSelected()                   // ⌫: the selected item, or everything
         case 14 where cmd: closeImageEditor(keep: true)                     // ⌘E again
         default:
             guard !cmd else { break }
             if let index = colorKeys.firstIndex(of: e.keyCode), MarkColor.allCases.indices.contains(index) {
-                model.exportDraft?.editor?.color = MarkColor.allCases[index]
+                model.exportDraft?.setColor(MarkColor.allCases[index])
             } else if let tool = EditTool.allCases.first(where: { $0.keyCode == e.keyCode }) {
-                model.exportDraft?.editor?.tool = tool                      // A R H T B C
+                model.exportDraft?.setTool(tool)                            // A R H T B C
             }
         }
         return true
@@ -944,7 +968,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
     /// Opens the paste box above the selected card (Return on an image or file, ⌘R on any card). It
     /// starts from the card as it is, so Return without changes pastes the original.
-    func startExport(_ item: ClipItem) {
+    func startExport(_ item: ClipItem) { openExport(item, markup: false) }
+
+    /// ⌘E (or right-click → Markup…) on an image card: the paste box opens straight into Markup. Done
+    /// leads to the box (paste, copy or save the result); Esc closes it all.
+    func markup(_ item: ClipItem) { openExport(item, markup: true) }
+
+    private func openExport(_ item: ClipItem, markup: Bool) {
         guard !item.concealed else { return }
         endEditing()
         let defaults = UserDefaults.standard
@@ -977,6 +1007,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         }
         draft.startName = draft.name
         draft.startFormat = draft.format
+        if markup && draft.canEdit {
+            draft.beginEditing()
+            draft.openedForMarkup = true
+        }
         model.exportFocus = .name
         if defaults.object(forKey: "exportQuality") != nil {
             draft.quality = ExportDraft.nearestQuality(defaults.double(forKey: "exportQuality"))
@@ -1016,10 +1050,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         layoutExportForm()
     }
 
-    /// Done (keep) or Esc: back to the box, which then pastes, copies or saves the edited image.
+    /// Done (keep) or Esc: back to the box, which then pastes, copies or saves the edited image. Esc
+    /// after ⌘E on a card closes the box too: it was opened for Markup.
     func closeImageEditor(keep: Bool) {
-        guard model.exportDraft?.editor != nil else { return }
+        guard let draft = model.exportDraft, draft.editor != nil else { return }
+        if !keep && draft.openedForMarkup {
+            cancelExport()
+            return
+        }
         model.exportDraft?.endEditing(keep: keep)
+        model.exportDraft?.openedForMarkup = false
         layoutExportForm()
         popover.makeKey()
     }

@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// Mark up, blur and crop an image, inside the paste box (⌘E, or the Edit Image button). Drag on
-/// the image with a tool: Arrow (A), Box (R), Highlight (H), Text (T: click, type, Return), Blur (B:
-/// the area becomes a mosaic) or Crop (C: only that area is kept). 1–7 pick a color, ⌘Z undoes,
-/// ⌫ clears, Return is Done and Esc puts back what there was. The box then pastes, copies or saves
-/// the edited image.
+/// Mark up, blur and crop an image, inside the paste box (⌘E on an image card, or Markup in the box).
+/// Drag on the image with a tool: Arrow (A), Box (R), Highlight (H), Text (T: click, type, Return),
+/// Blur (B: the area becomes a mosaic) or Crop (C: only that area is kept). 1–7 pick a color.
+/// All of it works from the keyboard too: Space adds one in the middle, Tab selects, the arrows move
+/// (⌥ resizes, ⇧ in bigger steps), ⌫ deletes, Return changes selected text or is Done, Esc lets go
+/// and then cancels. The box then pastes, copies or saves the edited image.
 struct ImageEditorView: View {
     @ObservedObject var model: ShelfModel
     let draft: ExportDraft
@@ -88,19 +89,28 @@ struct ImageEditorView: View {
         }
     }
 
-    /// What the selected tool does, or what's been done so far.
+    /// What the selected tool does, or what the keys do with what's selected.
     private var instruction: String {
-        if editor.typing != nil { return "Return keeps the text, Esc removes it" }
-        let done = draft.edits.isEmpty ? "" : " · " + draft.edits.summary
-        return editor.tool.instruction + done
+        if editor.typing != nil { return "Return keeps the text · Esc takes it back" }
+        if let selected = editor.selected {
+            var keys = "Arrows move it (⇧ more) · ⌥ arrows resize · ⌫ deletes · Esc lets go"
+            if case .mark(let i) = selected, draft.edits.marks.indices.contains(i) {
+                switch draft.edits.marks[i].kind {
+                case .text: keys = "↩ changes the text · arrows move it · 1–7 color · ⌫ deletes · Esc lets go"
+                case .arrow: keys = "Arrows move it (⇧ more) · ⌥ arrows move the tip · 1–7 color · ⌫ deletes"
+                case .box: keys += " · 1–7 color"
+                case .highlight: break
+                }
+            }
+            return keys
+        }
+        let tab = draft.edits.isEmpty ? "" : " · ⇥ selects"
+        return editor.tool.instruction + " · Space adds one" + tab
     }
 
     private func toolButton(_ tool: EditTool) -> some View {
         let on = editor.tool == tool
-        return Button {
-            model.exportDraft?.finishTyping(keep: true)
-            model.exportDraft?.editor?.tool = tool
-        } label: {
+        return Button { model.exportDraft?.setTool(tool) } label: {
             Image(systemName: icon(tool))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(on ? Color.white : Color.primary)
@@ -125,7 +135,7 @@ struct ImageEditorView: View {
 
     private func swatch(_ color: MarkColor, _ index: Int) -> some View {
         let on = editor.color == color
-        return Button { model.exportDraft?.editor?.color = color } label: {
+        return Button { model.exportDraft?.setColor(color) } label: {
             Circle()
                 .fill(swiftUIColor(color))
                 .overlay(Circle().stroke(Color.primary.opacity(0.25), lineWidth: 0.5))
@@ -198,6 +208,15 @@ struct ImageEditorView: View {
                     .frame(width: r.width, height: r.height)
                     .offset(x: r.minX, y: r.minY)
             }
+            if let selected = editor.selected, editor.typing == nil,
+               let area = draft.bounds(of: selected, aspect: size.height > 0 ? Double(size.width / size.height) : 1) {
+                let r = rect(area, size).insetBy(dx: -4, dy: -4)
+                RoundedRectangle(cornerRadius: 3)
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                    .background(RoundedRectangle(cornerRadius: 3).stroke(Color.white.opacity(0.8), lineWidth: 3))
+                    .frame(width: max(r.width, 8), height: max(r.height, 8))
+                    .offset(x: r.minX, y: r.minY)
+            }
             if let drag, let dragArea {
                 let r = rect(dragArea, size)
                 switch editor.tool {
@@ -240,7 +259,8 @@ struct ImageEditorView: View {
             }
             .onEnded { value in
                 drag = nil
-                model.exportDraft?.addDrag(from: point(value.startLocation, in: size), to: point(value.location, in: size))
+                model.exportDraft?.addDrag(from: point(value.startLocation, in: size), to: point(value.location, in: size),
+                                           aspect: size.height > 0 ? Double(size.width / size.height) : 1)
             }
     }
 

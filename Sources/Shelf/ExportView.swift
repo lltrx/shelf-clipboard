@@ -98,6 +98,7 @@ struct ExportView: View {
                     .controlSize(.small)
                     .help("Draw arrows, boxes, highlights and text, hide parts or crop the image")
                     .disabled(draft.busy)
+                    .overlay(focusRing(.markup))
                 }
             }
             .padding(.leading, 54)
@@ -159,9 +160,12 @@ struct ExportView: View {
     /// The keys worth knowing where focus is now.
     private func keyHints(_ draft: ExportDraft) -> [BoxHint] {
         var hints: [BoxHint] = []
-        if model.exportFocus == .name {
+        switch model.exportFocus {
+        case .name:
             if draft.source != .text { hints.append(BoxHint(key: "⇧↩", label: "Original")) }
-        } else {
+        case .markup:
+            hints.append(BoxHint(key: "↩", label: "Markup"))
+        default:
             hints.append(BoxHint(key: "← →", label: "Change"))
         }
         if draft.fields.count > 1 { hints.append(BoxHint(key: "⇥", label: "Next")) }

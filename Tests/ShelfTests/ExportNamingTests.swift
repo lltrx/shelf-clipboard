@@ -140,14 +140,15 @@ final class ExportNamingTests: XCTestCase {
 
     func testTabGoesThroughTheControlsShown() {
         var d = draft(["shot.png"], [true], .png, formats: [.png, .jpeg, .heic])
-        XCTAssertEqual(d.fields, [.name, .format, .size])
+        XCTAssertEqual(d.fields, [.name, .format, .size, .markup])         // Markup: a single image
         d.format = .jpeg
-        XCTAssertEqual(d.fields, [.name, .format, .size, .quality])
+        XCTAssertEqual(d.fields, [.name, .format, .size, .quality, .markup])
         XCTAssertEqual(d.field(after: .name), .format)
-        XCTAssertEqual(d.field(after: .quality), .name)                 // wraps around
-        XCTAssertEqual(d.field(after: .name, backward: true), .quality)
+        XCTAssertEqual(d.field(after: .markup), .name)                  // wraps around
+        XCTAssertEqual(d.field(after: .name, backward: true), .markup)
         XCTAssertEqual(draft(["a.pdf"], [false], .original, formats: [.original]).fields, [.name])   // nothing else to reach
-        XCTAssertEqual(draft(["a.png"], [true], .original).fields, [.name, .format])   // Keep Format: no Size
+        XCTAssertEqual(draft(["a.png"], [true], .original).fields, [.name, .format, .markup])   // Keep Format: no Size
+        XCTAssertEqual(draft(["a.png", "b.png"], [true, true], .png).fields, [.name, .format, .size])   // two images: no Markup
     }
 
     func testArrowsChangeTheFocusedControl() {
@@ -264,7 +265,7 @@ final class ExportNamingTests: XCTestCase {
         XCTAssertEqual(d.edits.summary, "3 marks")
 
         d.editor?.tool = .text
-        d.addDrag(from: EditPoint(x: 0.3, y: 0.3), to: EditPoint(x: 0.3, y: 0.3))              // a click
+        d.addDrag(from: EditPoint(x: 0.3, y: 0.3), to: EditPoint(x: 0.3, y: 0.3))              // a click, on the highlight
         XCTAssertEqual(d.editor?.typing, 3)
         d.typeText("Look here")
         XCTAssertEqual(d.typedText, "Look here")
@@ -282,6 +283,84 @@ final class ExportNamingTests: XCTestCase {
         d.undoEdit()                                                                           // then the text before
         XCTAssertEqual(d.edits.marks.count, 3)
         XCTAssertFalse(d.pastesOriginal)
+    }
+
+    func testMarkupWithTheKeyboard() {
+        var d = draft(["shot.png"], [true], .png, formats: [.png, .jpeg])
+        d.beginEditing()
+        d.addInMiddle()                                                     // Space: an arrow in the middle
+        XCTAssertEqual(d.edits.marks.count, 1)
+        XCTAssertEqual(d.editor?.selected, .mark(0))
+        d.moveSelected(dx: 0.1, dy: 0)                                      // → → → : one Undo step
+        d.moveSelected(dx: 0.1, dy: 0)
+        d.moveSelected(dx: 0.1, dy: 0)
+        XCTAssertEqual(d.edits.marks[0].to.x, 0.8, accuracy: 1e-9)
+        d.moveSelected(dx: 0.5, dy: 0)                                      // stops at the edge
+        XCTAssertEqual(d.edits.marks[0].to.x, 1, accuracy: 1e-9)
+        XCTAssertEqual(d.edits.marks[0].from.x, 0.85, accuracy: 1e-9)
+        d.resizeSelected(dw: -0.25, dh: 0)                                  // ⌥←: the arrow's head moves
+        XCTAssertEqual(d.edits.marks[0].to.x, 0.75, accuracy: 1e-9)
+        XCTAssertEqual(d.edits.marks[0].from.x, 0.85, accuracy: 1e-9)
+        d.setColor(.blue)                                                   // recolors the selected arrow
+        XCTAssertEqual(d.edits.marks[0].color, .blue)
+
+        d.setTool(.box)                                                     // B for… R: Box
+        XCTAssertNil(d.editor?.selected)
+        d.addInMiddle()
+        d.resizeSelected(dw: 0.5, dh: 0.5)                                  // grows to the edge, no further
+        XCTAssertEqual(d.edits.marks[1].rect, EditRect(x: 0.35, y: 0.35, w: 0.65, h: 0.65))
+        d.setTool(.crop)
+        d.addInMiddle()
+        XCTAssertEqual(d.editor?.selected, .crop)
+
+        d.select(nil)
+        d.selectNext()                                                      // Tab: marks, then blurs, then the crop
+        XCTAssertEqual(d.editor?.selected, .mark(0))
+        d.selectNext(backward: true)                                        // ⇧Tab wraps
+        XCTAssertEqual(d.editor?.selected, .crop)
+        d.deleteSelected()                                                  // ⌫: just the crop
+        XCTAssertNil(d.edits.crop)
+        XCTAssertEqual(d.edits.marks.count, 2)
+        d.undoEdit()
+        XCTAssertNotNil(d.edits.crop)
+
+        d.setTool(.text)
+        d.addInMiddle()                                                     // Space with Text: typing starts
+        d.typeText("Hi")
+        d.finishTyping(keep: true)
+        XCTAssertEqual(d.editor?.selected, .mark(2))
+        XCTAssertTrue(d.editSelectedText())                                 // Return on selected text: change it
+        d.typeText("Hello")
+        d.finishTyping(keep: false)                                         // Esc: the old text back
+        XCTAssertEqual(d.edits.marks[2].text, "Hi")
+        XCTAssertTrue(d.editSelectedText())
+        d.typeText("Hello")
+        d.finishTyping(keep: true)
+        XCTAssertEqual(d.edits.marks[2].text, "Hello")
+        d.select(.mark(0))
+        XCTAssertFalse(d.editSelectedText())                                // not text: Return is Done
+    }
+
+    func testClickingSelects() {
+        var d = draft(["shot.png"], [true], .png, formats: [.png, .jpeg])
+        d.beginEditing()
+        d.editor?.tool = .box
+        d.addDrag(from: EditPoint(x: 0.25, y: 0.25), to: EditPoint(x: 0.75, y: 0.75))
+        d.select(nil)
+        d.addDrag(from: EditPoint(x: 0.25, y: 0.5), to: EditPoint(x: 0.25, y: 0.5))         // a click on its edge
+        XCTAssertEqual(d.editor?.selected, .mark(0))
+        d.addDrag(from: EditPoint(x: 0.5, y: 0.5), to: EditPoint(x: 0.5, y: 0.5))           // inside, away from the edges
+        XCTAssertNil(d.editor?.selected)
+        XCTAssertEqual(d.edits.marks.count, 1)                                              // and nothing drawn
+        d.editor?.tool = .text
+        d.addDrag(from: EditPoint(x: 0.25, y: 0.5), to: EditPoint(x: 0.25, y: 0.5))         // Text: writes, even on a box
+        XCTAssertEqual(d.editor?.typing, 1)
+        d.typeText("A label")
+        d.finishTyping(keep: true)
+        d.select(nil)
+        d.addDrag(from: EditPoint(x: 0.27, y: 0.51), to: EditPoint(x: 0.27, y: 0.51))       // …but picks other text
+        XCTAssertEqual(d.editor?.selected, .mark(1))
+        XCTAssertNil(d.editor?.typing)
     }
 
     func testFormatExtensions() {

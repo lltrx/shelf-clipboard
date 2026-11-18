@@ -62,11 +62,11 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 | ⇧Return | Paste the other way (plain text ↔ with formatting); on an image or file, paste it as it is, skipping the box |
 | ⌘K | **Paste As:** formatted, plain text, Markdown, UPPERCASE / lowercase / Capitalized, trimmed, joined lines, formatted JSON, link without tracking, text in an image, file paths or names, and **lines one by one** (each ⌘V pastes the next line) |
 | ⌘R | **Copy as File:** the same box for any card: name it and pick a format (PNG, JPEG, HEIC, TIFF, GIF, PDF · Plain Text, Markdown, RTF, Word, HTML), then paste (Return), copy (⌘C) or save (⌘S) it |
-| ⌘E in the box | **Markup** a single image: arrows (A), boxes (R), highlights (H), text (T), blur (B, a mosaic) and crop (C), colors 1–7, ⌘Z undoes, Return is Done |
+| ⌘E on an image | **Markup:** arrows (A), boxes (R), highlights (H), text (T), blur (B, a mosaic) and crop (C), colors 1–7. All by keyboard too: Space adds, Tab selects, arrows move, ⌥ arrows resize, ⌫ deletes, Return is Done |
 | ⌘1 … ⌘9 (⇧ for the other way) | Paste item 1–9 (hold ⌘ to see the numbers and every ⌘ shortcut) |
 | drag a card | Drop it into another app (images become a named PNG file). Dragging a marked card drags all the marked ones; a card with several files drags them all |
 | Space | Full preview (when the search field is empty); files open in Quick Look |
-| ⌘E | Edit in the preview, then ⌘Return to paste (⇧⌘Return plain) · Esc cancels |
+| ⌘E on text | Edit in the preview, then ⌘Return to paste (⇧⌘Return plain) · Esc cancels |
 | ⌘C | Copy to clipboard without pasting |
 | ⌘P | Pin / unpin (asks which pinboard when there are several; 1–9 picks) |
 | ⌘N | New pinboard |

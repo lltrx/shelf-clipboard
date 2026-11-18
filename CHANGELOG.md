@@ -37,10 +37,13 @@ and files on the way, grab text from anywhere on screen, and let secrets clean t
   Return, Return is a normal paste), otherwise the new file. ⇧Return pastes the original straight away;
   ⌘C copies, ⌘S saves. Tab moves between the controls and the arrow keys change them. Turn it off with
   **Ask before pasting images and files** in Settings.
-- **Markup (⌘E in the paste box):** draw **arrows**, **boxes**, **highlights** and **text** on an image,
-  in seven colors, **blur** what shouldn't be seen (a coarse mosaic of its own colors, which can't be
-  undone like a light blur) and **crop** it. A R H T B C pick the tools, 1–7 the colors, ⌘Z undoes,
-  Return is Done. The preview is drawn the same way as the file; the card itself stays as it was.
+- **Markup (⌘E on any image card, or right-click → Markup…):** draw **arrows**, **boxes**,
+  **highlights** and **text** on an image, in seven colors, **blur** what shouldn't be seen (a coarse
+  mosaic of its own colors, which can't be undone like a light blur) and **crop** it. Works for copied
+  images, screenshots and image files. A R H T B C pick the tools, 1–7 the colors, ⌘Z undoes, Return
+  is Done. **Fully keyboard-driven too:** Space adds a mark in the middle, Tab selects, the arrows
+  move it, ⌥ arrows resize it, ⌫ deletes it. The preview is drawn the same way as the file; the card
+  itself stays as it was.
 - **Copy as File (⌘R, or right-click):** the same box for any card. Text becomes a Plain Text (any
   extension you type, such as `deploy.sh`), Markdown, RTF, Word or HTML file. Renaming a JPEG or HEIC
   without resizing copies it unchanged.

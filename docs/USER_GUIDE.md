@@ -37,7 +37,7 @@ in **Settings** (⌘,).
 | ⌘C | Copy the card to the clipboard without pasting |
 | ⌘R | Copy as File: the same box, for any card (see below) |
 | Space | Open the full preview (when the search field is empty) |
-| ⌘E | Edit the card before pasting |
+| ⌘E | Images: Markup (arrows, text, blur, crop). Text: edit it before pasting |
 | ⌘P | Pin or unpin |
 | ⌘N | New pinboard |
 | Tab / ⇧Tab | Next / previous tab (History, then each pinboard) |
@@ -117,8 +117,10 @@ opens it.
 
 ### Markup: arrows, text, blur and crop
 
-To point at something in a screenshot, or hide a name or a key before you send it, press **⌘E** in
-the box (or click **Markup**). The box grows to show the image. Pick a tool, then drag on the image:
+To point at something in an image, or hide a name or a key before you send it, select any image card
+(a copied image, a screenshot, or an image file) and press **⌘E**, or right-click it → **Markup…**.
+In the paste box, press ⌘E, click **Markup**, or Tab to it and press Return. A box opens with the
+image. Pick a tool, then drag on the image:
 
 | Tool | Key | What it does |
 |---|---|---|
@@ -130,7 +132,23 @@ the box (or click **Markup**). The box grows to show the image. Pick a tool, the
 | Crop | C | Drag around what to keep. Dragging again replaces the crop |
 
 Arrows, boxes and text come in seven colors: click one, or press **1–7**. **⌘Z** undoes the last
-step, **⌫** clears everything, **Return** is Done and **Esc** cancels.
+step, **Return** is Done and **Esc** cancels.
+
+**With the keyboard only:**
+
+| Keys | What they do |
+|---|---|
+| A R H T B C | Pick a tool |
+| Space | Add one in the middle of the image (with Text, start typing there) |
+| Tab / ⇧Tab | Select the next / previous mark, blurred area or crop |
+| ← → ↑ ↓ | Move what's selected (hold ⇧ for bigger steps) |
+| ⌥ ← → ↑ ↓ | Resize it from its bottom right corner (an arrow: move its tip) |
+| 1–7 | Color, for new marks and the selected one |
+| Return | On selected text: change it. Otherwise: Done |
+| ⌫ | Delete what's selected (with nothing selected: clear everything) |
+| Esc | Let go of the selection; with nothing selected, cancel |
+
+The mouse and keys mix: draw with the mouse, then nudge with the arrows. Clicking a mark selects it.
 
 Back in the box, the line under the name says what you did ("2 marks, 1 area hidden, cropped"), and
 Return pastes the edited image, ⌘C copies it and ⌘S saves it. The card in the shelf stays as it was.
@@ -244,8 +262,8 @@ you changed it in the Screenshot app's Options); allow it.
   Screenshot app (⇧⌘5) → **Options** and turn off **Show Floating Thumbnail**.
 - Only files macOS marks as screenshots are added, not other images saved in that folder.
 - Don't want this? Turn off **Add screenshots** in Settings. Pause Capture also pauses it.
-- To point at something in a screenshot, or hide something before sending it, press Return on it,
-  then ⌘E (Markup).
+- To point at something in a screenshot, or hide something before sending it, select it and press
+  ⌘E (Markup).
 
 ## Searching screenshots
 

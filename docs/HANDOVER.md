@@ -115,7 +115,12 @@ scaled so the printed size stays the same) or copies files (an APFS clone) into
 (`markOwnChange()`) or are moved to a save panel's location. The form's size estimate encodes the image
 for real, off the main thread, 0.25 s after the settings stop changing.
 
-**Markup (⌘E in the box, ImageEditorView.swift).** `ExportDraft.editor` holds the tool, the color, the
+**Markup (⌘E on an image card or in the box, ImageEditorView.swift).** ⌘E on a card (`markup`) opens
+the box straight into the editor (`openedForMarkup`: Esc then closes the whole box). Keyboard: the
+editor has a selection (`EditSelection`: a mark, a blur or the crop); `addInMiddle`, `selectNext`,
+`moveSelected` / `resizeSelected` (a run of them is one Undo step, `nudging`), `deleteSelected`,
+`setColor` (recolors the selection) and `editSelectedText`; a click on an item picks it
+(`item(at:aspect:)`, boxes and the crop by their edges, text by an estimated frame from `bounds(of:)`). `ExportDraft.editor` holds the tool, the color, the
 edits to put back on Esc, an undo history and the text mark being typed; `ExportDraft.edits`
 (`ImageEdits`: marks, blur rectangles and a crop, all as fractions of the image from the top left)
 travels in `FileExport.Job`. Drags arrive as `addDrag(from:to:)`; a Text click adds an empty mark and
