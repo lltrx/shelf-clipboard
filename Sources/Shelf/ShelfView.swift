@@ -15,6 +15,7 @@ protocol ShelfActions: AnyObject {
     func edit(_ item: ClipItem)
     func startExport(_ item: ClipItem)
     func markup(_ item: ClipItem)
+    func fixAutoPaste()
     func finishExport(_ action: ExportAction)
     func cancelExport()
     func openImageEditor()
@@ -58,6 +59,7 @@ final class ShelfModel: ObservableObject {
     @Published var exportFocus: ExportField = .name   // the paste box control Tab is on
     var selectedCardMidX: CGFloat?              // the selected card's center in the shelf, for the paste box
     var cardFrames: [Int64: CGRect] = [:]      // where the visible cards are, to drag several at once
+    @Published var canAutoPaste = true          // Accessibility allowed, so Return pastes (not only copies)
 
     struct TargetApp: Equatable {
         let bundle: String
@@ -231,6 +233,21 @@ struct ShelfView: View {
     /// What the keys do for the selected card. Holding ⌘ lists the ⌘ shortcuts instead.
     private var footer: some View {
         HStack(spacing: 14) {
+            if !model.canAutoPaste {
+                // Without Accessibility, Return copies but can't press ⌘V for you.
+                Button { model.actions?.fixAutoPaste() } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                        Text("Return only copies · Turn on auto-paste").underline()
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.orange)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .fixedSize()
+                .help("macOS needs to allow Shelf to press ⌘V (Accessibility). Click to fix it.")
+            }
             ForEach(hints, id: \.self) { hint in
                 HStack(spacing: 4) {
                     Text(hint.key).font(.system(size: 11, weight: .semibold))

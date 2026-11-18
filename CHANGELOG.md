@@ -90,6 +90,10 @@ and files on the way, grab text from anywhere on screen, and let secrets clean t
   along the row, and the preview and paste box fade in. Pasting still closes the shelf at once. With
   **Reduce motion** on (System Settings → Accessibility → Display), things fade instead of moving.
 - The Shelf menu shows the version at the bottom.
+- **When auto-paste is off** (macOS hasn't allowed Shelf to press ⌘V), Return no longer seems to do
+  nothing: a message says the item was copied, and the shelf shows **Return only copies · Turn on
+  auto-paste**. One click clears Shelf's old Accessibility entry (an old one can look switched on
+  after an update and still not count) and asks macOS again.
 
 ### Changed
 - **⌘,** in the shelf opens Settings; the **⋯** button still opens the Shelf menu. Add Screenshots,

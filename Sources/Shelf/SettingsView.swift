@@ -21,6 +21,8 @@ protocol SettingsActions: AnyObject {
     func pauseShortcuts()
     /// Something else in Settings changed: pick it up.
     func settingsChanged()
+    /// Removes Shelf's old Accessibility entry and asks macOS again (see AppDelegate.fixAutoPaste).
+    func fixAutoPaste()
 }
 
 /// The Settings window's state. Values live in UserDefaults (the same keys the app reads), so the
@@ -234,9 +236,7 @@ final class SettingsModel: ObservableObject {
         return true
     }
 
-    func allowAutoPaste() {
-        _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
-    }
+    func allowAutoPaste() { actions?.fixAutoPaste() }
 
     func refresh() { objectWillChange.send() }
 }
@@ -293,10 +293,10 @@ struct SettingsView: View {
                     if settings.canAutoPaste {
                         Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     } else {
-                        Button("Allow…") { settings.allowAutoPaste() }
+                        Button("Turn On…") { settings.allowAutoPaste() }
                     }
                 }
-                .help("Lets Shelf press ⌘V for you after you pick a card (System Settings → Privacy & Security → Accessibility)")
+                .help("Lets Shelf press ⌘V for you after you pick a card (System Settings → Privacy & Security → Accessibility). Turn On also clears an old Shelf entry that looks on but no longer counts.")
             }
 
             Section("History") {

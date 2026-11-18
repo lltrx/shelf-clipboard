@@ -497,6 +497,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
             model.commandHeld = false
             model.password = monitor.concealedOnClipboard.map(ClipItem.concealedPlaceholder)
             model.now = Date()
+            model.canAutoPaste = AXIsProcessTrusted()
             reload()
         }
         panel.makeKeyAndOrderFront(nil)
@@ -829,8 +830,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
     /// Sends ⌘V to the frontmost app. Needs Accessibility; without it the item just stays on the clipboard.
     /// The system prompt is shown at most once per launch; after that, use "Allow Auto-Paste…" in the menu.
     private func postPaste() {
-        guard AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": !axPrompted] as CFDictionary) else {
-            axPrompted = true
+        guard AXIsProcessTrusted() else {
+            // Without Accessibility, Shelf can't press ⌘V. The item is on the clipboard, so say so (the
+            // shelf also shows "Return only copies" with a way to fix it).
+            toast.show("Copied · press ⌘V to paste (auto-paste is off)", symbol: "doc.on.clipboard")
+            if !axPrompted {
+                axPrompted = true
+                _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+            }
+            model.canAutoPaste = false
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -1557,7 +1565,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         pause.state = monitor.paused ? .on : .off
         menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
         if !AXIsProcessTrusted() {
-            menu.addItem(withTitle: "Allow Auto-Paste…", action: #selector(openAccessibility), keyEquivalent: "")
+            menu.addItem(withTitle: "Turn On Auto-Paste…", action: #selector(openAccessibility), keyEquivalent: "")
         }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Export Pinboards…", action: #selector(exportPinboards), keyEquivalent: "")
@@ -1711,8 +1719,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
     static func appName(_ bundle: String) -> String { AppName.of(bundle) }
 
-    @objc private func openAccessibility() {
+    @objc private func openAccessibility() { fixAutoPaste() }
+
+    /// Auto-paste needs Accessibility. Each new build (every beta) is a new app to macOS, so an old
+    /// "Shelf" entry in that list can look switched on and still not count, and then macOS doesn't
+    /// ask again. This removes Shelf's entry, asks again, and opens the Accessibility settings, where
+    /// Shelf can be switched on.
+    func fixAutoPaste() {
+        if shelfOpen { hide(animated: false) }
+        let reset = Process()
+        reset.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        reset.arguments = ["reset", "Accessibility", Bundle.main.bundleIdentifier ?? "com.turkifaisal.shelf"]
+        if (try? reset.run()) != nil { reset.waitUntilExit() }
+        axPrompted = true
         _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+        toast.show("Switch Shelf on in Accessibility, then Return pastes for you", symbol: "hand.raised")
     }
 
     @objc private func openFolder() { NSWorkspace.shared.open(store.dir) }

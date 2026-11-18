@@ -332,7 +332,7 @@ bar icons that don't fit, and Shelf's may be one of them.
 
 | Problem | Fix |
 |---|---|
-| Return closes the shelf but nothing is pasted | Shelf needs Accessibility permission: System Settings → Privacy & Security → Accessibility → turn Shelf on. The item is still on the clipboard, so ⌘V works by hand. |
+| Return closes the shelf but nothing is pasted | Shelf needs Accessibility to press ⌘V for you; without it Return only copies (a message says "Copied · press ⌘V", and the bottom of the shelf says **Return only copies**). Click that, or Settings → Auto-paste → **Turn On…**: Shelf clears its old entry and macOS asks again; switch Shelf on. This is needed again after installing a beta, because macOS sees each beta as a new app even when the old entry still looks switched on. In Terminal: `tccutil reset Accessibility com.turkifaisal.shelf`, then paste once and allow it. |
 | macOS keeps asking for Accessibility although Shelf is on | The entry belongs to an older copy. Select Shelf in that list, click **−**, then paste once and allow it again. |
 | ⇧⌘V does nothing | Another app owns the shortcut (often Paste). Pick a different one in **Settings** → **Shortcuts** (open it from the menu bar icon), or quit the other app. |
 | A copy is missing | Capture may be paused (menu bar), the app may be ignored (Settings), or the app marked the copy as temporary, which Shelf respects. A key or password is deleted after a few minutes unless pinned. |
