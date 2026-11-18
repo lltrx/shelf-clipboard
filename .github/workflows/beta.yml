@@ -1,0 +1,99 @@
+name: Beta release
+
+# Publishes a test build as a GitHub pre-release, for the Homebrew cask lltrx/tap/shelf-clipboard@beta.
+# Either change .github/beta-version (for example to 1.6.0-beta.2) and push it on any branch, or push
+# a tag such as v1.6.0-beta.2. The commit is tested, built with that version, tagged, and published.
+# If a run gets stuck or GitHub cancels it, start it again from the Actions tab (Run workflow, on the
+# branch): it publishes the version in .github/beta-version, unless that one is already out.
+# CI has no Developer ID, so beta builds are ad-hoc signed and not notarized (the release notes say
+# what that means for installing). Stable releases still come from scripts/release.sh.
+
+on:
+  push:
+    branches: ["**"]
+    paths: [".github/beta-version", ".github/workflows/beta.yml"]   # branch pushes: only these
+    tags: ["v*-beta*"]                # tag pushes always run (paths don't apply to tags)
+  workflow_dispatch:                  # Run workflow, from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  beta:
+    name: Build and publish beta
+    runs-on: macos-15   # macos-14 was retired on 2026-11-02
+    timeout-minutes: 30 # a normal run takes about 3
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Pick the version
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION=$(tr -d '[:space:]' < .github/beta-version)
+          fi
+          case "$VERSION" in
+            *-beta*) ;;
+            *) echo "::error::$VERSION isn't a beta version (like 1.6.0-beta.1)"; exit 1 ;;
+          esac
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "::notice::v$VERSION is already released. Change .github/beta-version to publish a new beta."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Show toolchain
+        if: steps.version.outputs.skip != 'true'
+        run: swift --version
+
+      - name: Run tests
+        if: steps.version.outputs.skip != 'true'
+        run: swift test
+
+      - name: Build universal app
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Info.plist
+          ./build.sh
+          ditto -c -k --keepParent build/Shelf.app "Shelf-$VERSION.zip"
+          echo "SHA256=$(shasum -a 256 "Shelf-$VERSION.zip" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+      - name: Publish pre-release
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # What's new: the Unreleased section of the changelog, or, when it's empty, the section of the
+          # version this is a beta of (2.0.0 for 2.0.0-beta.3).
+          section() { awk -v h="## [$1]" 'index($0, h) == 1 { on = 1; next } on && /^## \[/ { exit } on { print }' CHANGELOG.md; }
+          CHANGES=$(section Unreleased)
+          if [ -z "$(printf '%s' "$CHANGES" | tr -d '[:space:]')" ]; then CHANGES=$(section "${VERSION%%-*}"); fi
+          {
+            printf '%s\n' "$CHANGES"
+            cat <<EOF
+
+          ---
+
+          **This is a beta for testing.** It was built by GitHub Actions, which doesn't have the Developer ID,
+          so it isn't signed by an identified developer or notarized by Apple:
+
+          - The first time you open it, macOS says it can't check Shelf for malicious software. Click
+            **Done**, open **System Settings → Privacy & Security**, and click **Open Anyway** next to Shelf.
+          - macOS asks for **Accessibility** again. In **System Settings → Privacy & Security →
+            Accessibility**, select Shelf, click **−**, then paste once and allow it. The same happens
+            when you go back to a signed release.
+
+          Your history and pinboards are kept. Install or update with Homebrew:
+
+              brew install --cask lltrx/tap/shelf-clipboard@beta
+
+          SHA-256 of Shelf-$VERSION.zip: $SHA256
+          EOF
+          } > notes.md
+          # Creates the tag on this commit when it doesn't exist yet (version-file pushes).
+          gh release create "v$VERSION" "Shelf-$VERSION.zip" docs/INSTALL.md docs/USER_GUIDE.md \
+            --prerelease --target "$GITHUB_SHA" --title "Shelf $VERSION (beta)" --notes-file notes.md

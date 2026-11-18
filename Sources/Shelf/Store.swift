@@ -27,6 +27,7 @@ struct ClipItem: Identifiable, Equatable {
     var formatted: Bool        // has rich-text representations stored
     var ocr: String?           // text recognized in images (nil = not processed yet)
     var concealed = false      // placeholder for a password on the clipboard; never stored
+    var expires: Date?         // a secret (key, token, password): deleted at this time unless pinned
 
     var pinned: Bool { board != nil }
     var editable: Bool { !concealed && (kind == .text || kind == .link) }
@@ -38,6 +39,15 @@ struct ClipItem: Identifiable, Equatable {
                  sourceName: nil, created: copy.date, board: nil, formatted: false, ocr: nil, concealed: true)
     }
     var filePaths: [String] { kind == .file ? (text ?? "").split(separator: "\n").map(String.init) : [] }
+}
+
+/// Everything needed to put a deleted card back (⌘Z).
+struct ItemSnapshot {
+    var capture: Capture
+    var created: Date
+    var board: Int64?
+    var ocr: String?
+    var expires: Date?
 }
 
 struct Board: Identifiable, Equatable {
@@ -112,20 +122,28 @@ final class Store {
 
     deinit { sqlite3_close(db) }
 
-    /// v2: pinboards (the single "pinned" flag becomes a "Pinned" board) and OCR text.
     private func migrate() {
         var version = 0
         query("PRAGMA user_version") { s in version = Int(sqlite3_column_int(s, 0)) }
-        guard version < 2 else { return }
-        var columns: Set<String> = []
-        query("PRAGMA table_info(items)") { s in if let name = col(s, 1) { columns.insert(name) } }
-        if !columns.contains("board") { exec("ALTER TABLE items ADD COLUMN board INTEGER;") }
-        if !columns.contains("ocr") { exec("ALTER TABLE items ADD COLUMN ocr TEXT;") }
-        if boards().isEmpty {
-            let id = createBoard("Pinned")
-            run("UPDATE items SET board = ? WHERE pinned = 1", [id])
+        // v2: pinboards (the single "pinned" flag becomes a "Pinned" board) and OCR text.
+        if version < 2 {
+            var columns: Set<String> = []
+            query("PRAGMA table_info(items)") { s in if let name = col(s, 1) { columns.insert(name) } }
+            if !columns.contains("board") { exec("ALTER TABLE items ADD COLUMN board INTEGER;") }
+            if !columns.contains("ocr") { exec("ALTER TABLE items ADD COLUMN ocr TEXT;") }
+            if boards().isEmpty {
+                let id = createBoard("Pinned")
+                run("UPDATE items SET board = ? WHERE pinned = 1", [id])
+            }
+            exec("PRAGMA user_version = 2;")
         }
-        exec("PRAGMA user_version = 2;")
+        // v3: secrets expire.
+        if version < 3 {
+            var columns: Set<String> = []
+            query("PRAGMA table_info(items)") { s in if let name = col(s, 1) { columns.insert(name) } }
+            if !columns.contains("expires") { exec("ALTER TABLE items ADD COLUMN expires REAL;") }
+            exec("PRAGMA user_version = 3;")
+        }
     }
 
     func imageURL(_ item: ClipItem) -> URL? {
@@ -136,7 +154,7 @@ final class Store {
         var out: [ClipItem] = []
         query("""
             SELECT id, kind, text, image, detail, source_bundle, source_name, created, board,
-                   EXISTS(SELECT 1 FROM formats WHERE item_id = items.id), ocr
+                   EXISTS(SELECT 1 FROM formats WHERE item_id = items.id), ocr, expires
             FROM items ORDER BY created DESC
             """) { s in
             out.append(ClipItem(
@@ -150,7 +168,8 @@ final class Store {
                 created: Date(timeIntervalSince1970: sqlite3_column_double(s, 7)),
                 board: sqlite3_column_type(s, 8) == SQLITE_NULL ? nil : sqlite3_column_int64(s, 8),
                 formatted: sqlite3_column_int(s, 9) != 0,
-                ocr: col(s, 10)
+                ocr: col(s, 10),
+                expires: sqlite3_column_type(s, 11) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: sqlite3_column_double(s, 11))
             ))
         }
         return out
@@ -203,9 +222,62 @@ final class Store {
         run("UPDATE items SET created = ? WHERE id = ?", [date.timeIntervalSince1970, id])
     }
 
-    /// Pin to a board, or unpin with nil.
+    /// Pin to a board, or unpin with nil. A pinned secret is kept: pinning clears its expiry.
     func setBoard(_ id: Int64, _ board: Int64?) {
         run("UPDATE items SET board = ?, pinned = ? WHERE id = ?", [board, board == nil ? 0 : 1, id])
+        if board != nil { run("UPDATE items SET expires = NULL WHERE id = ?", [id]) }
+    }
+
+    /// Marks a card as a secret that's deleted at `date` (nil: kept like any card).
+    func setExpiry(_ id: Int64, _ date: Date?) {
+        run("UPDATE items SET expires = ? WHERE id = ? AND pinned = 0", [date?.timeIntervalSince1970, id])
+    }
+
+    /// Deletes secrets whose time is up. Returns whether any were deleted.
+    @discardableResult
+    func deleteExpired(at now: Date = Date()) -> Bool {
+        let clause = "pinned = 0 AND expires IS NOT NULL AND expires <= ?"
+        var count = 0
+        query("SELECT COUNT(*) FROM items WHERE \(clause)", [now.timeIntervalSince1970]) { s in count = Int(sqlite3_column_int(s, 0)) }
+        guard count > 0 else { return false }
+        deleteWhere(clause, [now.timeIntervalSince1970])
+        return true
+    }
+
+    /// Forget Last 5 Minutes: deletes unpinned cards copied (or pasted) since `date`.
+    func deleteRecent(since date: Date) {
+        deleteWhere("pinned = 0 AND created >= ?", [date.timeIntervalSince1970])
+    }
+
+    /// A card as it is, to put back after it's deleted. Nil if it's gone, or its image file is.
+    func snapshot(_ id: Int64) -> ItemSnapshot? {
+        var snap: ItemSnapshot?
+        query("SELECT kind, text, image, detail, hash, source_bundle, source_name, created, board, ocr, expires FROM items WHERE id = ?",
+              [id]) { s in
+            let kind = ClipKind(rawValue: col(s, 0) ?? "") ?? .text
+            let image = col(s, 2).flatMap { try? Data(contentsOf: imagesDir.appendingPathComponent($0)) }
+            if kind == .image && image == nil { return }
+            let capture = Capture(kind: kind, text: col(s, 1), imageData: image, detail: col(s, 3), hash: col(s, 4) ?? "",
+                                  sourceBundle: col(s, 5), sourceName: col(s, 6))
+            snap = ItemSnapshot(capture: capture, created: Date(timeIntervalSince1970: sqlite3_column_double(s, 7)),
+                                board: sqlite3_column_type(s, 8) == SQLITE_NULL ? nil : sqlite3_column_int64(s, 8),
+                                ocr: col(s, 9),
+                                expires: sqlite3_column_type(s, 10) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: sqlite3_column_double(s, 10)))
+        }
+        snap?.capture.formats = formats(id)
+        return snap
+    }
+
+    /// Puts a deleted card back as it was: content, formatting, pinboard (if it still exists), date, text
+    /// found in it, expiry. Returns its new id.
+    @discardableResult
+    func restore(_ snap: ItemSnapshot) -> Int64? {
+        guard let id = upsert(snap.capture) else { return nil }
+        if let board = snap.board, boards().contains(where: { $0.id == board }) { setBoard(id, board) }
+        touch(id, at: snap.created)
+        if let ocr = snap.ocr { setOCR(id, ocr) }
+        if let expires = snap.expires { setExpiry(id, expires) }
+        return id
     }
 
     func delete(_ id: Int64) {

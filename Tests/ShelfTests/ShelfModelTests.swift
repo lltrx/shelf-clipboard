@@ -2,8 +2,8 @@ import XCTest
 @testable import Shelf
 
 final class ShelfModelTests: XCTestCase {
-    private func item(_ id: Int64, _ text: String, board: Int64? = nil) -> ClipItem {
-        ClipItem(id: id, kind: .text, text: text, image: nil, detail: nil, sourceBundle: nil, sourceName: nil,
+    private func item(_ id: Int64, _ text: String, board: Int64? = nil, kind: ClipKind = .text) -> ClipItem {
+        ClipItem(id: id, kind: kind, text: text, image: nil, detail: nil, sourceBundle: nil, sourceName: nil,
                  created: Date(), board: board, formatted: false, ocr: nil)
     }
 
@@ -44,5 +44,44 @@ final class ShelfModelTests: XCTestCase {
         m.toggleStack(password)
         XCTAssertTrue(m.stack.isEmpty)
         XCTAssertFalse(password.editable)
+    }
+
+    func testKindFilter() {
+        let m = model()
+        m.items.append(item(3, "https://example.com", kind: .link))
+        m.kindFilter = .link
+        XCTAssertEqual(m.filtered.map(\.id), [3])          // and no password card
+        m.kindFilter = .text
+        XCTAssertEqual(m.filtered.map(\.id), [1, 2])
+        m.query = "pin"
+        XCTAssertEqual(m.filtered.map(\.id), [2])
+    }
+
+    func testCycleKindGoesThroughEveryKindAndBackToAll() {
+        let m = model()
+        m.selection = 1
+        m.cycleKind(1)
+        XCTAssertEqual(m.kindFilter, .text)
+        XCTAssertEqual(m.selection, 0)                      // a new filter starts at the first card
+        m.cycleKind(1); m.cycleKind(1); m.cycleKind(1)
+        XCTAssertEqual(m.kindFilter, .file)
+        m.cycleKind(1)
+        XCTAssertNil(m.kindFilter)
+        m.cycleKind(-1)
+        XCTAssertEqual(m.kindFilter, .file)
+    }
+
+    func testPasteStyleFollowsTheTargetApp() {
+        let m = ShelfModel()
+        m.appStyles = ["com.microsoft.Excel": true, "com.microsoft.Word": false]
+        XCTAssertFalse(m.plainByDefault)                    // no app: the default (formatted)
+        m.target = .init(bundle: "com.microsoft.Excel", name: "Excel")
+        XCTAssertTrue(m.plainByDefault)
+        m.target = .init(bundle: "com.apple.TextEdit", name: "TextEdit")
+        XCTAssertFalse(m.plainByDefault)
+        m.plainEverywhere = true
+        XCTAssertTrue(m.plainByDefault)                     // TextEdit follows the default
+        m.target = .init(bundle: "com.microsoft.Word", name: "Word")
+        XCTAssertFalse(m.plainByDefault)                    // Word keeps its own setting
     }
 }
