@@ -387,12 +387,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         case 48: model.exportDraft?.selectNext(backward: e.modifierFlags.contains(.shift))   // tab: next item
         case 123, 124, 125, 126:                                            // arrows: move (⌥: resize)
             guard !cmd else { break }   // (a `where` here would only guard the last key code)
-            let (dx, dy): (Double, Double)
+            var dx = 0.0, dy = 0.0
             switch e.keyCode {
-            case 123: (dx, dy) = (-step, 0)
-            case 124: (dx, dy) = (step, 0)
-            case 125: (dx, dy) = (0, step)
-            default: (dx, dy) = (0, -step)
+            case 123: dx = -step
+            case 124: dx = step
+            case 125: dy = step
+            default: dy = -step
             }
             if option { model.exportDraft?.resizeSelected(dw: dx, dh: dy) } else { model.exportDraft?.moveSelected(dx: dx, dy: dy) }
         case 6 where cmd: model.exportDraft?.undoEdit()                     // ⌘Z
