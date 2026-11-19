@@ -1,5 +1,5 @@
 {
-  "note": "Shelf 2.0 demo, about 30 s. Copy to /tmp/shelf-shots/edit.json, then set each take's in/out and the zoom areas from its frames (render.py --sheet and --frame). 'area' is [x, y, w, h] as fractions of the take; the shelf is roughly the bottom 35% of the screen.",
+  "note": "Shelf 2.0 demo, about 45 s. Copy to /tmp/shelf-shots/edit.json, then set each take's in/out and the zoom areas from its frames (render.py --sheet and --frame). 'area' is [x, y, w, h] as fractions of the take; the shelf is roughly the bottom 35% of the screen.",
   "output": {"width": 1920, "height": 1080, "fps": 30},
   "transition": 0.35,
   "theme": {"background": "#101318", "text": "#ffffff", "muted": "#a7afbd"},

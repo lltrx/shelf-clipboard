@@ -429,7 +429,7 @@ def main():
     parser.add_argument("--only", help="segment numbers to include, e.g. 2,4,5")
     parser.add_argument("--frame", type=float, help="write the frame at this many seconds into the timeline")
     parser.add_argument("--sheet", action="store_true", help="write a contact sheet of every segment")
-    args = parser.parse_args()
+    args = parser.parse_intermixed_args()   # options before or after the file names
     for tool in ("ffmpeg", "ffprobe"):
         if not shutil.which(tool):
             die(f"needs {tool}: brew install ffmpeg")

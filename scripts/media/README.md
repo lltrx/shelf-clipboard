@@ -158,7 +158,7 @@ The video is cut together from five short takes, one per feature, with smooth zo
 matters, a caption per scene, crossfades, and a title card at each end. `render.py` does the editing
 from an edit list (`edit.example.json` is the storyboard). Two outputs come from it:
 
-- **`shelf-2.0-demo.mp4`:** the full video (about 30 s, 1920 × 1080), attached to the GitHub release.
+- **`shelf-2.0-demo.mp4`:** the full video (about 45 s, 1920 × 1080), attached to the GitHub release.
 - **`docs/images/demo.gif`:** a short cut (paste, Markup, grab text) shown at the top of the README.
 
 **Before recording**, ask the person to:
@@ -246,7 +246,7 @@ three-column table) with:
 ```markdown
 ![Shelf 2.0: pasting formatted notes, marking up a receipt with an arrow and a blur, and grabbing text from the screen](docs/images/demo.gif)
 
-▶ [Watch the 30-second video](https://github.com/lltrx/shelf-clipboard/releases/download/v2.0.1/shelf-2.0-demo.mp4)
+▶ [Watch the 44-second video](https://github.com/lltrx/shelf-clipboard/releases/download/v2.0.1/shelf-2.0-demo.mp4)
 
 ![The shelf at the bottom of the screen: formatted notes, a receipt image, a cleaned link, code, a color, Arabic text, JSON and a masked API key](docs/images/shelf.png)
 
@@ -297,7 +297,7 @@ and anything that didn't work as described here.
 
 ## Redoing only the video
 
-Run steps 1 to 4, then step 6. Add the "▶ Watch the 30-second video" line from step 7 under the GIF in
+Run steps 1 to 4, then step 6. Add the "▶ Watch the video" line from step 7 under the GIF in
 `README.md` if it isn't there yet, then run steps 8 and 9 with
 `git add docs/images/demo.gif README.md`.
 
