@@ -230,8 +230,8 @@ Rules:
 - Migrations live in `Store.migrate()`, gated on `user_version`. Add a new `if version < N` step;
   never edit an existing one.
 
-**Never move this folder into the Knowledge Base.** The KB auto-commits to git, and the history
-contains passwords and other secrets.
+**Never move this folder into a git repository or a synced folder** (iCloud Drive, Dropbox, a notes
+vault that auto-commits): the history contains passwords and other secrets.
 
 ## Build, run, release
 

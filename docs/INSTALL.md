@@ -4,18 +4,20 @@ Shelf is a free, local-only clipboard history app for macOS. Everything you copy
 
 **Requirements:** macOS 14 Sonoma or later, on Apple Silicon or Intel.
 
-## With Homebrew
+## Option A: with Homebrew (easiest)
 
-If you use [Homebrew](https://brew.sh):
+If you use [Homebrew](https://brew.sh), run these in Terminal. Current Homebrew asks you to trust a
+tap once before installing from it:
 
 ```sh
+brew trust lltrx/tap
 brew install --cask lltrx/tap/shelf-clipboard
 ```
 
-This installs Shelf.app into Applications; continue from step 3 below. Update later with
+This puts Shelf.app in Applications. Continue with **First run** below. Update later with
 `brew upgrade --cask shelf-clipboard`.
 
-## Option A: install the app (recommended)
+## Option B: download the app
 
 Download the latest `Shelf-<version>.zip` from the
 [Releases page](https://github.com/lltrx/shelf-clipboard/releases) (or use a copy someone shared with you).
@@ -24,20 +26,9 @@ Download the latest `Shelf-<version>.zip` from the
 2. Move **Shelf.app** to your **Applications** folder.
 3. Open it. macOS asks whether you want to open an app downloaded from the internet; click **Open**.
    Shelf is signed with an Apple Developer ID and checked by Apple (notarized), so nothing else is
-   needed. (Versions 1.2 and 1.2.1 weren't notarized and needed **Open Anyway** in System Settings →
-   Privacy & Security.)
-4. A clipboard icon appears in the menu bar. Shelf has no Dock icon; that is normal.
-5. Click the menu bar icon and turn on **Launch at Login**.
-6. Copy something, press **⇧⌘V**, and press **Return** on a card. macOS asks for **Accessibility**
-   permission, which Shelf needs to paste into other apps for you. Click **Open System Settings**
-   and turn **Shelf** on.
+   needed. Continue with **First run** below.
 
-Done. See the user guide (USER_GUIDE.md) for all shortcuts.
-
-> **Work-managed Macs:** if your Mac is managed by your company (for example with Jamf), the
-> Accessibility switch may be blocked by policy. Ask your IT team to allow Shelf.
-
-## Option B: build it yourself from source
+## Option C: build it yourself from source
 
 For people comfortable with Terminal.
 
@@ -52,19 +43,45 @@ For people comfortable with Terminal.
    ./build.sh --install
    ```
    This builds Shelf, installs it to `~/Applications/Shelf.app` and opens it.
-4. Continue from step 5 of Option A.
+4. Continue with **First run** below.
 
 When you build it yourself, the app is signed only for your Mac. After each rebuild, macOS may ask for
 Accessibility again; if so, remove Shelf from the Accessibility list with **−** and allow it again.
 
+## First run
+
+1. A clipboard icon appears in the menu bar. Shelf has no Dock icon; that is normal.
+2. Copy something, press **⇧⌘V**, and press **Return** on a card. macOS asks for **Accessibility**
+   permission, which Shelf needs to paste into other apps for you. Click **Open System Settings** and
+   turn **Shelf** on. Until then, Return only copies (the shelf says so, with a link to fix it).
+3. Open **Settings** (menu bar icon → **Settings…**, or **⌘,** in the shelf) and turn on
+   **Launch at login**.
+
+macOS may ask for two more permissions later, only when you use the feature:
+
+- **Files and folders** for the folder screenshots are saved in (usually the Desktop), so screenshots
+  you take appear in the shelf. Allow it, or turn off **Add screenshots** in Settings.
+- **Screen Recording**, the first time you press **⇧⌘2** (Grab Text from Screen).
+
+Done. See the [user guide](USER_GUIDE.md) for all shortcuts.
+
+> **Work-managed Macs:** if your Mac is managed by your company (for example with Jamf), the
+> Accessibility switch may be blocked by policy. Ask your IT team to allow Shelf.
+
 ## Updating
 
-Quit Shelf (menu bar icon → **Quit Shelf**), replace **Shelf.app** with the new version, and open it.
-Your history and pinboards are kept, because they are stored separately from the app.
+**Homebrew:** `brew upgrade --cask shelf-clipboard`.
 
-**Updating from 1.2 or 1.2.1 to 1.3 or later:** Shelf's signature changed to an Apple Developer ID, so
-macOS asks for Accessibility once more. In **System Settings → Privacy & Security → Accessibility**,
-select Shelf, click **−**, then paste once and allow it again. Later updates keep the permission.
+**Downloaded app:** quit Shelf (menu bar icon → **Quit Shelf**), replace **Shelf.app** with the new
+version, and open it.
+
+Your history and pinboards are kept, because they are stored separately from the app, and so is the
+Accessibility permission.
+
+**If Return stops pasting after an update** (it only copies): the shelf shows **Return only copies ·
+Turn on auto-paste**. Click it, or Settings → Auto-paste → **Turn On…**, and switch Shelf on again. This
+happens when the app's signature changes, for example moving from 1.2, from a beta, or from a copy you
+built yourself.
 
 ## Changing the shortcut
 
@@ -81,12 +98,13 @@ Shortcuts use ⌘, ⌥ or ⌃ (and ⇧ if you like) with a letter, a digit or Sp
 2. Install Shelf on the new Mac.
 3. On the new Mac: menu bar icon → **Import Pinboards…** and choose that file.
 
-Only pinboards move this way. History expires after 30 days anyway.
+Only pinboards move this way, not History.
 
 ## Uninstalling
 
 1. Menu bar icon → **Settings…** → turn off **Launch at login**, then menu bar icon → **Quit Shelf**.
-2. Move **Shelf.app** to the Trash.
+2. Installed with Homebrew: `brew uninstall --cask shelf-clipboard`. Otherwise move **Shelf.app** to
+   the Trash.
 3. Remove it from **System Settings → Privacy & Security → Accessibility** (select it, click **−**).
 4. To also delete your clipboard history, pinboards and backups, delete this folder:
    `~/Library/Application Support/Shelf`
@@ -95,6 +113,12 @@ Only pinboards move this way. History expires after 30 days anyway.
 ## Privacy
 
 Shelf has no network code and no account. It records what you copy in a database on your Mac that only
-your user account can read. Passwords copied from password managers are skipped; anything else,
-**including a password you copy from ordinary text**, is recorded. Use **Pause Capture** in the menu
-bar before copying something you don't want kept.
+your user account can read.
+
+- Passwords copied from password managers are skipped.
+- Keys, tokens and passwords copied from ordinary text (API keys, `password=…`, card numbers…) are
+  shown masked and deleted after 5 minutes unless you pin them. Everything else is kept for 30 days
+  (both are adjustable in Settings).
+- Apps you add to **Ignored apps** in Settings are never recorded.
+- **Pause Capture** in the menu bar stops recording until you turn it back on; **Forget Last 5
+  Minutes** deletes what you just copied.
