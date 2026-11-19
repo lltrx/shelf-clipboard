@@ -16,6 +16,8 @@ Press **⇧⌘V** anywhere for a row of everything you copied, and Return to pas
 
 ![Shelf 2.0: pasting formatted notes, marking up a receipt with an arrow and a blur, and grabbing text from the screen](docs/images/demo.gif)
 
+▶ [Watch the 30-second video](https://github.com/lltrx/shelf-clipboard/releases/download/v2.0.1/shelf-2.0-demo.mp4)
+
 ![The shelf at the bottom of the screen: formatted notes, a receipt image, a cleaned link, code, a color, Arabic text, JSON and a masked API key](docs/images/shelf.png)
 
 | Paste As (⌘K) | The paste box (Return on an image) | Markup (⌘E) |
