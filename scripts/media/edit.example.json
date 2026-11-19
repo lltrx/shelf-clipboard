@@ -1,0 +1,81 @@
+{
+  "note": "Shelf 2.0 demo, about 30 s. Copy to /tmp/shelf-shots/edit.json, then set each take's in/out and the zoom areas from its frames (render.py --sheet and --frame). 'area' is [x, y, w, h] as fractions of the take; the shelf is roughly the bottom 35% of the screen.",
+  "output": {"width": 1920, "height": 1080, "fps": 30},
+  "transition": 0.35,
+  "theme": {"background": "#101318", "text": "#ffffff", "muted": "#a7afbd"},
+  "segments": [
+    {
+      "type": "title", "duration": 2.4,
+      "icon": "~/Projects/shelf_clipboard/Resources/AppIcon.icns",
+      "title": "Shelf 2.0",
+      "subtitle": "Everything you copy, ready to paste."
+    },
+    {
+      "note": "Take 1: ⇧⌘V, the formatted notes are first, Return pastes them into TextEdit.",
+      "type": "clip", "file": "scenes/1-paste.mov", "in": 0.3, "out": 5.5, "speed": 1.0,
+      "caption": "⇧⌘V opens the shelf · Return pastes, formatting and all",
+      "zoom": [
+        {"t": 0.0, "rect": "full"},
+        {"t": 1.2, "area": [0.0, 0.6, 0.62, 0.4]},
+        {"t": 3.0, "area": [0.0, 0.6, 0.62, 0.4]},
+        {"t": 4.2, "area": [0.0, 0.0, 0.7, 0.45]}
+      ]
+    },
+    {
+      "note": "Take 2: select the JSON card, ⌘K, P (Format JSON): pretty JSON lands in TextEdit.",
+      "type": "clip", "file": "scenes/2-paste-as.mov", "in": 0.3, "out": 5.0, "speed": 1.1,
+      "caption": "⌘K · paste as plain text, Markdown, formatted JSON and more",
+      "zoom": [
+        {"t": 0.0, "area": [0.0, 0.35, 0.65, 0.65]},
+        {"t": 1.0, "area": [0.08, 0.3, 0.42, 0.55]},
+        {"t": 2.8, "area": [0.08, 0.3, 0.42, 0.55]},
+        {"t": 3.8, "area": [0.0, 0.0, 0.7, 0.45]}
+      ]
+    },
+    {
+      "note": "Take 3: type 'confirmation': only the receipt is left, found by the text inside it.",
+      "type": "clip", "file": "scenes/3-search.mov", "in": 0.2, "out": 3.6, "speed": 1.0,
+      "caption": "Search finds the text inside images",
+      "zoom": [
+        {"t": 0.0, "area": [0.0, 0.6, 0.55, 0.4]},
+        {"t": 1.4, "area": [0.0, 0.62, 0.32, 0.3]}
+      ]
+    },
+    {
+      "note": "Take 4: ⌘E on the receipt, arrow to $42.00, 'Due Friday', blur the email, Done, 25%, Return.",
+      "type": "clip", "file": "scenes/4-markup.mov", "in": 0.3, "out": 12.0, "speed": 1.6,
+      "caption": "⌘E · arrows, text, blur and crop, then paste",
+      "zoom": [
+        {"t": 0.0, "area": [0.2, 0.15, 0.6, 0.6]},
+        {"t": 5.0, "area": [0.2, 0.15, 0.6, 0.6]},
+        {"t": 6.4, "rect": "full"}
+      ]
+    },
+    {
+      "note": "Take 5: ⇧⌘2, drag over the receipt's text in TextEdit, 'Copied N words', ⌘V.",
+      "type": "clip", "file": "scenes/5-grab.mov", "in": 0.3, "out": 7.0, "speed": 1.2,
+      "caption": "⇧⌘2 · copy the text from anything on screen",
+      "zoom": [
+        {"t": 0.0, "area": [0.0, 0.05, 0.55, 0.55]},
+        {"t": 3.0, "area": [0.0, 0.05, 0.55, 0.55]},
+        {"t": 3.8, "area": [0.3, 0.75, 0.4, 0.25]},
+        {"t": 5.0, "area": [0.0, 0.0, 0.6, 0.6]}
+      ]
+    },
+    {
+      "note": "A freeze-frame from take 1 with the shelf open: zoom onto the 🔑 key card.",
+      "type": "still", "file": "scenes/1-paste.mov", "at": 2.0, "duration": 2.4,
+      "caption": "Keys and passwords are hidden, then deleted",
+      "zoom": [
+        {"t": 0.0, "area": [0.0, 0.6, 0.62, 0.4]},
+        {"t": 2.4, "area": [0.16, 0.66, 0.22, 0.28]}
+      ]
+    },
+    {
+      "type": "title", "duration": 3.0,
+      "title": "Shelf 2.0",
+      "subtitle": "Free and open source · nothing leaves your Mac",
+      "code": "brew install --cask lltrx/tap/shelf-clipboard"
+    }
+  ]
+}

@@ -152,39 +152,91 @@ scripts/media/demo.sh shrink /tmp/shelf-shots/*.png
 cp /tmp/shelf-shots/*.png docs/images/
 ```
 
-### 6. The demo GIF
+### 6. The demo video
 
-Record the bottom part of the screen, from the top of the TextEdit window to the bottom of the shelf
-(points, from `screen` and `windows`), while the steps below run. Start the recording in the background,
-wait a second, then run the steps with a pause between each:
+The video is cut together from five short takes, one per feature, with smooth zooms onto what
+matters, a caption per scene, crossfades, and a title card at each end. `render.py` does the editing
+from an edit list (`edit.example.json` is the storyboard). Two outputs come from it:
 
-```sh
-scripts/media/demo.sh record X,Y,W,H 32 /tmp/shelf-shots/demo.mov &
-```
+- **`shelf-2.0-demo.mp4`:** the full video (about 30 s, 1920 × 1080), attached to the GitHub release.
+- **`docs/images/demo.gif`:** a short cut (paste, Markup, grab text) shown at the top of the README.
 
-1. `press cmd+shift+v` (wait 1.2 s). The formatted notes are first: `press return`. They paste into
-   TextEdit with formatting (wait 1.5 s).
-2. `press return` in TextEdit twice for space. `press cmd+shift+v`, `type "confirmation"` (wait 1 s),
-   `press cmd+e` (wait 1.2 s).
-3. `press space` (an arrow in the middle); a few `press shift+right` / `press shift+down` and
-   `press opt+right` until it points at the total (wait 0.3 s between presses). `press b`,
-   `press space`, `press shift+down` once or twice over the email. `press return` (Done). In the box,
-   `press tab` twice (Size) and `press right` three times (25%), so the receipt doesn't fill the
-   window, then `press return` (paste): the marked-up receipt lands in TextEdit (wait 1.5 s).
-4. `press cmd+shift+2`, then `drag` over a line of the pasted notes in TextEdit (screen points;
-   find them with a quick screenshot first). Wait for the "Copied N words" message (2 s), then
-   `press return` and `press cmd+v` in TextEdit to paste the text.
+**Before recording**, ask the person to:
 
-Rehearse the steps once without recording, and adjust the waits and key counts until it looks right.
-Clear TextEdit between takes (`press cmd+a`, `press delete`). Then turn the recording into a GIF and
-check it:
+- Quit apps that draw over every window. Wispr Flow's indicator pill showed up in the first GIF.
+- Turn on **Do Not Disturb** (Control Center → Focus), so no notification slides in.
+
+Pillow is needed for the editing:
 
 ```sh
-scripts/media/demo.sh gif /tmp/shelf-shots/demo.mov /tmp/shelf-shots/demo.gif 1200 15
+python3 -m venv /tmp/shelf-venv && /tmp/shelf-venv/bin/pip install --quiet pillow
+mkdir -p /tmp/shelf-shots/scenes
 ```
 
-Look at a few frames (extract them with ffmpeg if needed). Keep it under about 8 MB: if it's bigger,
-use width 1000 or 12 fps. Then copy it to `docs/images/demo.gif`.
+**Recording a take.** Record the visible area (`demo.sh screen`, "visible": no menu bar, no Dock) for
+a few seconds longer than the take. Start the recording in the background, wait 1 s, run the steps
+with a pause between each, and let it run out:
+
+```sh
+scripts/media/demo.sh record X,Y,W,H 10 /tmp/shelf-shots/scenes/1-paste.mov &
+```
+
+Rehearse each take once without recording. Between takes, clear TextEdit (`press cmd+a`,
+`press delete`), close what's open with `press esc`, and check with a screenshot that the scene is
+as the next take expects. The waits below are a start: slow enough to read, never idle for long,
+since the edit cuts and speeds up anyway.
+
+| Take | File | Seconds | Steps |
+|---|---|---|---|
+| 1 | `1-paste.mov` | 8 | `press cmd+shift+v` (wait 1.5 s, the shelf slides up; the notes card is first), `press return` (the notes paste with formatting; wait 2 s). |
+| 2 | `2-paste-as.mov` | 8 | `press cmd+shift+v`, `press right` until the JSON card is selected, `press cmd+k` (wait 1.5 s on the menu), `press p` (Format JSON; wait 2 s on the result). |
+| 3 | `3-search.mov` | 6 | `press cmd+shift+v`, `type "confirmation"` at a natural pace (wait 2 s on the single receipt card), `press esc`. |
+| 4 | `4-markup.mov` | 18 | `press cmd+shift+v`, `type "confirmation"`, `press cmd+e`; arrow (`press space`, move it, `opt+` arrows to point at $42.00), `press t`, `press space`, `type "Due Friday"`, `press return`, move it; `press b`, `press space`, move the blur over the email; `press return` (Done); in the box `press tab` twice and `press right` three times (25%); `press return` (paste). Wait 1.5 s at the end. |
+| 5 | `5-grab.mov` | 10 | With the marked-up receipt pasted in TextEdit: `press cmd+shift+2`, `drag` across the receipt's "Order confirmation" line and the rows below it (screen points), wait 2 s on the "Copied N words" message, `press return`, `press cmd+v` in TextEdit (wait 2 s). |
+
+**Editing.** Copy the storyboard and check every segment on a contact sheet (three frames each):
+
+```sh
+cp scripts/media/edit.example.json /tmp/shelf-shots/edit.json
+/tmp/shelf-venv/bin/python scripts/media/render.py /tmp/shelf-shots/edit.json /tmp/shelf-shots/sheet.png --sheet
+```
+
+Then adjust `/tmp/shelf-shots/edit.json`, checking single moments with
+`render.py edit.json --frame SECONDS /tmp/shelf-shots/f.png`:
+
+- **`in` / `out`:** cut each take to the action, with no idle time at the start or the end.
+  **`speed`:** 1.0 to 1.8 (faster for typing and nudging, never so fast that it's hard to follow).
+- **Zoom keyframes:** start wide enough to see where you are, zoom in (1.5× to 2.5×) as the action
+  starts, and zoom out to show the result. `"area": [x, y, w, h]` is in fractions of the take, and
+  `"rect"` in its pixels. Keep the thing that changes in the middle third of the frame, and the text in
+  it readable at 1080p.
+- **Captions:** one short line per scene, naming the key. Keep the storyboard's unless the take
+  shows something else.
+- **The freeze-frame (segment 7):** set `at` to a moment in take 1 where the shelf is open and the
+  🔑 key card is visible, and point its zoom at that card.
+
+Render the full video and the short cut, then look at frames across both:
+
+```sh
+/tmp/shelf-venv/bin/python scripts/media/render.py /tmp/shelf-shots/edit.json /tmp/shelf-shots/shelf-2.0-demo.mp4
+/tmp/shelf-venv/bin/python scripts/media/render.py /tmp/shelf-shots/edit.json /tmp/shelf-shots/short.mp4 --only 2,5,6
+scripts/media/demo.sh gif /tmp/shelf-shots/short.mp4 docs/images/demo.gif 1000 15
+```
+
+Keep the GIF under about 6 MB: if it's bigger, use width 900 or 12 fps. Check frames from the start,
+middle and end of each output for:
+
+- nothing personal on screen
+- no overlay pill or notification
+- captions that are readable and not cut off
+- zooms that land on the action
+
+Show the person the MP4 (`open /tmp/shelf-shots/shelf-2.0-demo.mp4`) before publishing it. With
+their OK, attach it to the latest release:
+
+```sh
+gh release upload v2.0.1 /tmp/shelf-shots/shelf-2.0-demo.mp4 --clobber
+```
 
 ### 7. The README
 
@@ -193,6 +245,8 @@ three-column table) with:
 
 ```markdown
 ![Shelf 2.0: pasting formatted notes, marking up a receipt with an arrow and a blur, and grabbing text from the screen](docs/images/demo.gif)
+
+▶ [Watch the 30-second video](https://github.com/lltrx/shelf-clipboard/releases/download/v2.0.1/shelf-2.0-demo.mp4)
 
 ![The shelf at the bottom of the screen: formatted notes, a receipt image, a cleaned link, code, a color, Arabic text, JSON and a masked API key](docs/images/shelf.png)
 
@@ -240,6 +294,12 @@ git push origin claude/epic-hopper-bt9cd0
 
 Don't push to `main` and don't run `scripts/release.sh`. Report which shots you took, the GIF's size,
 and anything that didn't work as described here.
+
+## Redoing only the video
+
+Run steps 1 to 4, then step 6. Add the "▶ Watch the 30-second video" line from step 7 under the GIF in
+`README.md` if it isn't there yet, then run steps 8 and 9 with
+`git add docs/images/demo.gif README.md`.
 
 ## Retaking some shots
 
