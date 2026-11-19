@@ -1,0 +1,326 @@
+# Capturing Shelf's README screenshots and demo GIF
+
+A runbook for a Claude Code session running **on the Mac** (it needs the screen), in this repository.
+It produces the images in `docs/images/`, the README section that shows them, and a commit on the
+branch `claude/epic-hopper-bt9cd0`. Your real clipboard history and settings are moved aside first and
+put back at the end, so no personal data reaches the images.
+
+## Starting the session (for the person)
+
+1. On the Mac with Shelf 2.0 installed (in `/Applications`, through Homebrew), open Terminal:
+   ```sh
+   cd ~/Projects/shelf_clipboard && git fetch origin claude/epic-hopper-bt9cd0 && git checkout claude/epic-hopper-bt9cd0 && git pull
+   ```
+2. Start `claude` there and paste the prompt below.
+3. When asked, allow the terminal app (Terminal, iTerm or the Claude app) in **System Settings →
+   Privacy & Security → Accessibility** (to press keys and move the mouse) and **Screen & System Audio
+   Recording** (to take screenshots of other apps). Quit and reopen the terminal if macOS says so.
+4. Switch the keyboard input source to **ABC** or **U.S.** while it runs, and don't touch the keyboard or
+   mouse during the scripted parts. It takes about 20 to 30 minutes.
+
+### The prompt
+
+> You're running on my Mac, in my Shelf repository, on the branch `claude/epic-hopper-bt9cd0`. Follow
+> `scripts/media/README.md` from "The run" to the end to capture Shelf 2.0's README screenshots and demo
+> GIF, update the README, and push the branch. Use `scripts/media/demo.sh` for every key press,
+> screenshot and recording. Look at each image you take and redo it until it matches the shot list.
+> Before you change anything on my Mac that the runbook doesn't mention, ask me. Whatever happens, end
+> with `scripts/media/demo.sh sandbox-off` so my real clipboard history and settings come back, and
+> check `demo.sh status` says the sandbox is off. Don't push to main and don't make a release.
+
+## The run
+
+### 1. Check the setup
+
+```sh
+scripts/media/demo.sh status            # sandbox must be off, Shelf running
+scripts/media/demo.sh screen            # screen size and scale (expect scale 2 on a Retina Mac)
+command -v ffmpeg gifski pngquant       # if any is missing, ask, then: brew install ffmpeg gifski pngquant
+defaults read -g AppleInterfaceStyle 2>/dev/null || echo Light   # note it, to restore at the end
+```
+
+If `demo.sh status` says the sandbox is **on**, a previous run didn't finish: run `sandbox-off` first.
+The first `screen` or `windows` call compiles the Swift helpers into `/tmp/shelf-media-bin` (about a
+minute).
+
+### 2. Sandbox and appearance
+
+```sh
+scripts/media/demo.sh sandbox-on
+osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to false'
+```
+
+`sandbox-on` quits Shelf, moves `~/Library/Application Support/Shelf` to `Shelf-real`, saves Shelf's
+settings to a plist and clears them (so Settings shows the defaults and screenshots don't become
+cards), keeps the demo API key for an hour instead of 5 minutes (so cards don't move mid-shoot), then
+opens Shelf empty. A fresh Shelf always has one pinboard, **Pinned**. From here on, any failure means: fix it or stop, but finish with
+`sandbox-off`.
+
+Shots are taken in Light mode. If the person had Dark mode on, turn it back on at the end.
+
+### 3. The scene
+
+Open a blank TextEdit document filling the area above the shelf, so the shelf has something to paste
+into and the shots have a quiet background:
+
+```sh
+osascript -e 'tell application "TextEdit" to activate' -e 'tell application "TextEdit" to make new document'
+scripts/media/demo.sh screen     # use "visible": the area without the menu bar and the Dock
+```
+
+Set the TextEdit window's bounds to the whole visible area (it runs behind the shelf too, so no desktop
+icons show between them), with
+`osascript -e 'tell application "TextEdit" to set bounds of front window to {L, T, R, B}'`. In TextEdit,
+choose **Format → Make Rich Text** if the document is plain, so pasted formatting shows. The first time
+an image is pasted, TextEdit asks to convert the document to RTFD: press Return (Convert).
+
+`press` and `type` only send keys while TextEdit or Shelf is in front, and stop with an error
+otherwise. Add apps for one call with `DEMO_APPS=TextEdit,Shelf,Notes scripts/media/demo.sh press …`.
+
+### 4. Fill the shelf
+
+```sh
+scripts/media/demo.sh copy-demo
+```
+
+This copies nine items, each from a fitting app (TextEdit, Notes, Terminal, Safari):
+
+1. a list of names
+2. JSON on one line
+3. Arabic text
+4. Swift code
+5. a color code
+6. a GitHub link with tracking (Shelf cleans it)
+7. a fake API key (a 🔑 card)
+8. an order receipt image
+9. formatted meeting notes
+
+The notes end up at the front of the row; check that their card says "Formatted". The fake key
+stays for an hour in the sandbox. Wait 5 seconds after the image so Shelf has read its text. Bring
+TextEdit back to the front afterwards (`osascript -e 'tell application "TextEdit" to activate'`).
+
+The shelf always opens on the newest card, and pasting a card makes it the newest. After a paste, the
+card you want may be further along: use `press left`/`press right` and check with a screenshot.
+
+Then make a pinboard for the pinboard shot:
+
+```sh
+scripts/media/demo.sh copy-demo snippet
+scripts/media/demo.sh press cmd+shift+v      # open the shelf
+scripts/media/demo.sh press cmd+n            # new pinboard: the name field gets the keys (2.0.1 and later)
+scripts/media/demo.sh type "Replies"
+scripts/media/demo.sh press return           # creates "Replies" and shows it (empty)
+scripts/media/demo.sh press tab              # History (tabs go History → Pinned → Replies)
+scripts/media/demo.sh press cmd+p            # the snippet is selected; with two pinboards a menu opens
+scripts/media/demo.sh press 2                # 2 = Replies (1 = Pinned)
+scripts/media/demo.sh press esc
+```
+
+With Shelf 2.0.0, ⌘N leaves the keys in search: click the name field before typing. Check with a
+quick screenshot that the Replies tab holds the snippet. Then run `copy-demo notes` so the notes are
+first in History.
+
+### 5. Screenshots
+
+How to take each one:
+
+- Open the state with key presses, waiting about 0.6 s between steps (`sleep 0.6`).
+- Find the window with `scripts/media/demo.sh windows`. The shelf is the wide window at the bottom, about
+  312 points tall; the paste box sits above it; Settings is titled "Shelf Settings".
+- Capture it with `shot-window ID FILE`, which keeps a single window and leaves out the shadow. When the
+  shot needs two windows (a box and the card under it), use `shot-rect X,Y,W,H FILE` with a rectangle
+  around both, plus 12 points of margin.
+- Save into `/tmp/shelf-shots/` first and **look at every image**. Redo it until it matches the
+  description below.
+- Close what you opened with `esc` before the next shot.
+
+| File | How to get there | What it must show |
+|---|---|---|
+| `shelf.png` | `press cmd+shift+v` | The whole shelf: tabs, filter icons, search, the row of cards with the formatted notes selected (first), the 🔑 key card visible, the bottom bar with the keys and "Plain Text / Formatted" at the right. |
+| `paste-as.png` | shelf open, notes selected, `press cmd+k` | The Paste As menu with its letters, down to **Copy as File… E**, and the card it belongs to. From 2.0.1 the menu opens upward from the top of the shelf, so it's above the cards. Use `shot-rect` around the menu and the left part of the shelf. |
+| `paste-box.png` | shelf open; `press right` until the receipt is selected; `press return`; `type "Receipt"` (the name is selected, so this replaces it); `press tab` (Format), `press right` until JPEG; `press tab` (Size), `press right` (75%), `press right` (50%) | The paste box above the receipt card: "Receipt", JPEG, the Size buttons all readable (Original, 75%, 50% chosen, 25%), Quality, and the "Receipt.jpg · 900 × 560 · … KB" result line. `shot-rect` around the box and the card. |
+| `markup.png` | receipt selected, `press cmd+e` (Markup opens straight away). Then: `press a`, `press space` (arrow in the middle); move it with `press right`/`press down` (shift for big steps) until the tip, moved with `opt+right`/`opt+down`, points at "$42.00". `press t`, `press space`, `type "Due Friday"`, `press return`; move it next to the arrow. `press b`, `press space`; move the blur down over the email row with `press down`. `press esc` to let go of the selection. | The Markup editor with the arrow, the text and the blurred email; nothing selected. `shot-window`. Leave it open for the next step only if needed; `press esc` twice closes it without keeping anything. |
+| `search.png` | `press cmd+shift+v`, `type "confirmation"` | The shelf filtered to the receipt alone (found by the text inside the image), the search field showing "confirmation". ("order" also finds the snippet.) |
+| `preview.png` | shelf open, receipt selected, `press space` | The large preview above the shelf: the receipt, with the text Shelf read from it beside it. `shot-window` on the preview window. |
+| `pinboards.png` | shelf open, `press tab` to "Replies" | The Replies pinboard with the snippet card (`{{clipboard}}`, `{{date}}`). |
+| `settings.png` | shelf open, `press cmd+,` | The Settings window at the top: Shortcuts (⇧⌘V, ⌥⇧⌘V, ⇧⌘2) and the start of Pasting. `shot-window`. Close it with `press cmd+w`. |
+
+After all eight, shrink them and copy them into the repository:
+
+```sh
+scripts/media/demo.sh shrink /tmp/shelf-shots/*.png
+cp /tmp/shelf-shots/*.png docs/images/
+```
+
+### 6. The demo video
+
+The video is cut together from five short takes, one per feature, with smooth zooms onto what
+matters, a caption per scene, crossfades, and a title card at each end. `render.py` does the editing
+from an edit list (`edit.example.json` is the storyboard). Two outputs come from it:
+
+- **`shelf-2.0-demo.mp4`:** the full video (about 45 s, 1920 × 1080), attached to the GitHub release.
+- **`docs/images/demo.gif`:** a short cut (paste, Markup, grab text) shown at the top of the README.
+
+**Before recording**, ask the person to:
+
+- Quit apps that draw over every window. Wispr Flow's indicator pill showed up in the first GIF.
+- Turn on **Do Not Disturb** (Control Center → Focus), so no notification slides in.
+
+Pillow is needed for the editing:
+
+```sh
+python3 -m venv /tmp/shelf-venv && /tmp/shelf-venv/bin/pip install --quiet pillow
+mkdir -p /tmp/shelf-shots/scenes
+```
+
+**Recording a take.** Record the visible area (`demo.sh screen`, "visible": no menu bar, no Dock) for
+a few seconds longer than the take. Start the recording in the background, wait 1 s, run the steps
+with a pause between each, and let it run out:
+
+```sh
+scripts/media/demo.sh record X,Y,W,H 10 /tmp/shelf-shots/scenes/1-paste.mov &
+```
+
+Rehearse each take once without recording. Between takes, clear TextEdit (`press cmd+a`,
+`press delete`), close what's open with `press esc`, and check with a screenshot that the scene is
+as the next take expects. The waits below are a start: slow enough to read, never idle for long,
+since the edit cuts and speeds up anyway.
+
+| Take | File | Seconds | Steps |
+|---|---|---|---|
+| 1 | `1-paste.mov` | 8 | `press cmd+shift+v` (wait 1.5 s, the shelf slides up; the notes card is first), `press return` (the notes paste with formatting; wait 2 s). |
+| 2 | `2-paste-as.mov` | 8 | `press cmd+shift+v`, `press right` until the JSON card is selected, `press cmd+k` (wait 1.5 s on the menu), `press p` (Format JSON; wait 2 s on the result). |
+| 3 | `3-search.mov` | 6 | `press cmd+shift+v`, `type "confirmation"` at a natural pace (wait 2 s on the single receipt card), `press esc`. |
+| 4 | `4-markup.mov` | 18 | `press cmd+shift+v`, `type "confirmation"`, `press cmd+e`; arrow (`press space`, move it, `opt+` arrows to point at $42.00), `press t`, `press space`, `type "Due Friday"`, `press return`, move it; `press b`, `press space`, move the blur over the email; `press return` (Done); in the box `press tab` twice and `press right` three times (25%); `press return` (paste). Wait 1.5 s at the end. |
+| 5 | `5-grab.mov` | 10 | With the marked-up receipt pasted in TextEdit: `press cmd+shift+2`, `drag` across the receipt's "Order confirmation" line and the rows below it (screen points), wait 2 s on the "Copied N words" message, `press return`, `press cmd+v` in TextEdit (wait 2 s). |
+
+**Editing.** Copy the storyboard and check every segment on a contact sheet (three frames each):
+
+```sh
+cp scripts/media/edit.example.json /tmp/shelf-shots/edit.json
+/tmp/shelf-venv/bin/python scripts/media/render.py /tmp/shelf-shots/edit.json /tmp/shelf-shots/sheet.png --sheet
+```
+
+Then adjust `/tmp/shelf-shots/edit.json`, checking single moments with
+`render.py edit.json --frame SECONDS /tmp/shelf-shots/f.png`:
+
+- **`in` / `out`:** cut each take to the action, with no idle time at the start or the end.
+  **`speed`:** 1.0 to 1.8 (faster for typing and nudging, never so fast that it's hard to follow).
+- **Zoom keyframes:** start wide enough to see where you are, zoom in (1.5× to 2.5×) as the action
+  starts, and zoom out to show the result. `"area": [x, y, w, h]` is in fractions of the take, and
+  `"rect"` in its pixels. Keep the thing that changes in the middle third of the frame, and the text in
+  it readable at 1080p.
+- **Captions:** one short line per scene, naming the key. Keep the storyboard's unless the take
+  shows something else.
+- **The freeze-frame (segment 7):** set `at` to a moment in take 1 where the shelf is open and the
+  🔑 key card is visible, and point its zoom at that card.
+
+Render the full video and the short cut, then look at frames across both:
+
+```sh
+/tmp/shelf-venv/bin/python scripts/media/render.py /tmp/shelf-shots/edit.json /tmp/shelf-shots/shelf-2.0-demo.mp4
+/tmp/shelf-venv/bin/python scripts/media/render.py /tmp/shelf-shots/edit.json /tmp/shelf-shots/short.mp4 --only 2,5,6
+scripts/media/demo.sh gif /tmp/shelf-shots/short.mp4 docs/images/demo.gif 1000 15
+```
+
+Keep the GIF under about 6 MB: if it's bigger, use width 900 or 12 fps. Check frames from the start,
+middle and end of each output for:
+
+- nothing personal on screen
+- no overlay pill or notification
+- captions that are readable and not cut off
+- zooms that land on the action
+
+Show the person the MP4 (`open /tmp/shelf-shots/shelf-2.0-demo.mp4`) before publishing it. With
+their OK, attach it to the latest release:
+
+```sh
+gh release upload v2.0.1 /tmp/shelf-shots/shelf-2.0-demo.mp4 --clobber
+```
+
+### 7. The README
+
+Replace the images at the top of `README.md` (the `demo.gif` line, the `shelf.png` line and the
+three-column table) with:
+
+```markdown
+![Shelf 2.0: pasting formatted notes, marking up a receipt with an arrow and a blur, and grabbing text from the screen](docs/images/demo.gif)
+
+▶ [Watch the 44-second video](https://github.com/lltrx/shelf-clipboard/releases/download/v2.0.1/shelf-2.0-demo.mp4)
+
+![The shelf at the bottom of the screen: formatted notes, a receipt image, a cleaned link, code, a color, Arabic text, JSON and a masked API key](docs/images/shelf.png)
+
+| Paste As (⌘K) | The paste box (Return on an image) | Markup (⌘E) |
+|---|---|---|
+| ![The Paste As menu: with formatting, plain text, Markdown, and text changes](docs/images/paste-as.png) | ![Converting the receipt to a JPEG at half size before pasting](docs/images/paste-box.png) | ![An arrow, a label and a blurred email on the receipt](docs/images/markup.png) |
+
+| Search, even inside images | Full preview (Space) | Pinboards and snippets |
+|---|---|---|
+| ![Searching "confirmation" finds the receipt by the text in it](docs/images/search.png) | ![The receipt in the large preview](docs/images/preview.png) | ![A Replies pinboard with a snippet using {{clipboard}} and {{date}}](docs/images/pinboards.png) |
+
+![Settings: shortcuts, paste style, history, privacy](docs/images/settings.png)
+```
+
+Keep the rest of the README as it is. Delete any image in `docs/images/` the README no longer uses.
+
+### 8. Put everything back
+
+Always, even after a failure:
+
+```sh
+osascript -e 'tell application "TextEdit" to close every document saving no'
+scripts/media/demo.sh sandbox-off
+scripts/media/demo.sh status        # must say: sandbox: off
+```
+
+If the person had Dark mode on, turn it back on:
+
+```sh
+osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true'
+```
+
+Tell them they can switch the input source back.
+
+### 9. Commit and push
+
+Look at every image in `docs/images/` once more for anything personal: names in the menu bar, other
+windows, notifications. Then:
+
+```sh
+git add docs/images README.md
+git commit -m "README: Shelf 2.0 screenshots and demo GIF"
+git push origin claude/epic-hopper-bt9cd0
+```
+
+Don't push to `main` and don't run `scripts/release.sh`. Report which shots you took, the GIF's size,
+and anything that didn't work as described here.
+
+## Redoing only the video
+
+Run steps 1 to 4, then step 6. Add the "▶ Watch the video" line from step 7 under the GIF in
+`README.md` if it isn't there yet, then run steps 8 and 9 with
+`git add docs/images/demo.gif README.md`.
+
+## Retaking some shots
+
+To redo only some images (for example after a Shelf update changed them), run steps 1 to 4, then
+take just those shots from step 5, shrink them, copy them into `docs/images/`, then run step 8. Commit
+with a message naming the images. The README doesn't change. Install the Shelf version you're
+shooting first (`brew upgrade --cask shelf-clipboard`) and check it in the Shelf menu.
+
+**For Shelf 2.0.1:** retake `paste-as.png` (the menu now opens upward and shows everything down to Copy
+as File) and `paste-box.png` (the Size buttons now keep their labels). Keep the same framing and
+content as the 2.0.0 shots.
+
+## Notes
+
+- **Keys:** `press` sends physical keys through System Events, the same way Shelf reads them, so it
+  works with any keyboard layout. `type` sends characters, which is why the input source has to be
+  ABC or U.S.
+- **Coordinates:** all coordinates are points with the origin at the top left of the main screen.
+  Screenshots come out at the screen's scale (2× on Retina).
+- **If it gets stuck:** if the shelf doesn't open, Shelf's shortcut may differ. `sandbox-on` resets it
+  to ⇧⌘V; if it still doesn't open, check that Shelf is running and that nothing else owns ⇧⌘V.
+- **If Return only copies:** the shelf says "Return only copies". Shelf itself needs Accessibility (it
+  already has it on this Mac). The demo only pastes into TextEdit, so ⌘V by hand also works.
+- **`demo-content --receipt FILE`** writes the receipt image on its own, if a shot needs it as a file.

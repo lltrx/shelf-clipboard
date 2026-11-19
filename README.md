@@ -1,15 +1,34 @@
 # Shelf — local clipboard history
 
-A small native macOS clipboard manager (Swift/SwiftUI, no dependencies) that replaces Paste.
-History never leaves the Mac: no iCloud, no account, no network code.
+A small native macOS clipboard manager (Swift/SwiftUI, no dependencies). Everything you copy stays on
+your Mac: no iCloud, no account, no network code. Free and open source (MIT).
 
-![Shelf in action: ⇧⌘V opens the shelf over TextEdit, items are pasted, searched, previewed, and a pinboard is opened](docs/images/demo.gif)
+Press **⇧⌘V** anywhere for a row of everything you copied, and Return to paste it. Also:
 
-![Shelf open at the bottom of the screen, showing recent copies: a link, code, an image, notes, Arabic text, and files](docs/images/shelf.png)
+- Paste the way the app needs it: plain or formatted per app, or as Markdown, UPPERCASE, clean JSON, a
+  link without tracking (**⌘K**).
+- Rename, resize or convert images and files before pasting them, and mark up screenshots with
+  arrows, text, blur and crop (**⌘E**).
+- Grab the text from anything on screen (**⇧⌘2**), search inside screenshots, and find copies by app
+  or date (`from:slack @today`).
+- Pinboards for things you paste often, with snippets like `{{date}}`.
+- Keys, tokens and passwords are masked and deleted after a few minutes; password managers are skipped.
 
-| Search everything you copied | Full preview (Space) | Pinboards |
+![Shelf 2.0: pasting formatted notes, marking up a receipt with an arrow and a blur, and grabbing text from the screen](docs/images/demo.gif)
+
+▶ [Watch the 44-second video](https://github.com/lltrx/shelf-clipboard/releases/download/v2.0.1/shelf-2.0-demo.mp4)
+
+![The shelf at the bottom of the screen: formatted notes, a receipt image, a cleaned link, code, a color, Arabic text, JSON and a masked API key](docs/images/shelf.png)
+
+| Paste As (⌘K) | The paste box (Return on an image) | Markup (⌘E) |
 |---|---|---|
-| ![Searching for "swift"](docs/images/search.png) | ![Previewing a copied image](docs/images/preview.png) | ![The Snippets pinboard](docs/images/pinboards.png) |
+| ![The Paste As menu: with formatting, plain text, Markdown, and text changes](docs/images/paste-as.png) | ![Converting the receipt to a JPEG at half size before pasting](docs/images/paste-box.png) | ![An arrow, a label and a blurred email on the receipt](docs/images/markup.png) |
+
+| Search, even inside images | Full preview (Space) | Pinboards and snippets |
+|---|---|---|
+| ![Searching "confirmation" finds the receipt by the text in it](docs/images/search.png) | ![The receipt in the large preview](docs/images/preview.png) | ![A Replies pinboard with a snippet using {{clipboard}} and {{date}}](docs/images/pinboards.png) |
+
+![Settings: shortcuts, paste style, history, privacy](docs/images/settings.png)
 
 - [User guide](docs/USER_GUIDE.md): every feature and shortcut
 - [Install guide](docs/INSTALL.md): for other people, including updating and uninstalling
@@ -17,16 +36,23 @@ History never leaves the Mac: no iCloud, no account, no network code.
 
 ## Install
 
-**With Homebrew:**
+Requires macOS 14 Sonoma or later (Apple Silicon or Intel).
+
+**With Homebrew** (current Homebrew asks you to trust a tap before installing from it):
 
 ```sh
+brew trust lltrx/tap
 brew install --cask lltrx/tap/shelf-clipboard
 ```
 
 **Or download a release:** grab the latest `Shelf-<version>.zip` from the
-[Releases page](https://github.com/lltrx/shelf-clipboard/releases), then follow the
-[Install guide](docs/INSTALL.md). Shelf is signed with an Apple Developer ID and notarized by Apple,
-so it opens like any other downloaded app.
+[Releases page](https://github.com/lltrx/shelf-clipboard/releases), unzip it and move **Shelf.app** to
+Applications. Shelf is signed with an Apple Developer ID and notarized by Apple, so it opens like any
+other downloaded app.
+
+**Then:** press ⇧⌘V, pick a card and press Return. macOS asks to allow Shelf in **Accessibility**, which
+it needs to paste for you; switch it on. The [Install guide](docs/INSTALL.md) has the details, plus
+updating and uninstalling.
 
 **Or build from source:**
 
@@ -95,7 +121,7 @@ Pinned text can hold **snippet placeholders**, filled in when it's pasted: `{{da
 ## Data
 
 - `~/Library/Application Support/Shelf/history.sqlite` (mode 600) and `images/` (PNG files), folder mode 700.
-- Deliberately outside this KB so the auto-commit job never picks up clipboard contents.
+- Keep this folder out of git repositories and synced folders: it can contain passwords and other secrets.
 - Unpinned items are deleted after 30 days (Settings: 1 week to forever); pinned items never expire.
 - Text keeps RTF / HTML / RTFD formatting (up to 10 MB each). Edited text is saved as a new item;
   text changed by Paste As (⌘K) is pasted but not saved.
@@ -120,5 +146,5 @@ Pinned text can hold **snippet placeholders**, filled in when it's pasted: `{{da
 - Pinboards are backed up automatically once a day to `~/Library/Application Support/Shelf/Backups/`
   (`pinboards-YYYY-MM-DD.json`, last 7 kept, mode 600). History itself is not backed up; it expires anyway.
 - **Export Pinboards…** (menu bar) writes the same single JSON file anywhere you choose; images and
-  formatting are embedded. It may contain secrets, so don't put it in this KB, iCloud Drive, or Box.
+  formatting are embedded. It may contain secrets, so keep it somewhere private, not in a shared or synced folder.
 - **Import Pinboards…** merges a file back in: pinboards are matched by name, nothing is overwritten.

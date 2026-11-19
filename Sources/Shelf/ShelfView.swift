@@ -55,7 +55,7 @@ final class ShelfModel: ObservableObject {
     @Published var appStyles: [String: Bool] = [:]   // bundle id → Return pastes plain text (true) or formatted there
     @Published var askBeforePasting = true      // Return on an image or file opens the paste box first
     @Published var popoverArrowX: CGFloat = 200 // where the paste box's arrow points, in the box
-    @Published var popoverSize = CGSize(width: 400, height: 193)   // the box's size (bigger while editing an image)
+    @Published var popoverSize = CGSize(width: 440, height: 193)   // the box's size (bigger while editing an image)
     @Published var exportFocus: ExportField = .name   // the paste box control Tab is on
     var selectedCardMidX: CGFloat?              // the selected card's center in the shelf, for the paste box
     var cardFrames: [Int64: CGRect] = [:]      // where the visible cards are, to drag several at once
@@ -197,7 +197,12 @@ struct ShelfView: View {
         .padding(.top, 14)
         .padding(.bottom, 12)
         .onChange(of: model.focusTick) { focus = .search }
-        .onChange(of: model.naming) { focus = model.naming == nil ? .search : .name }
+        .onChange(of: model.naming) {
+            // On the next turn, once the name field is on screen: focusing a field that isn't there
+            // yet does nothing, which left the keys going to search after ⌘N.
+            let next: Field = model.naming == nil ? .search : .name
+            DispatchQueue.main.async { focus = next }
+        }
     }
 
     /// Show only one kind of card. ↑ ↓ cycle through them.

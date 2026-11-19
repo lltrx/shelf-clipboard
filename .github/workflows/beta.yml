@@ -89,6 +89,7 @@ jobs:
 
           Your history and pinboards are kept. Install or update with Homebrew:
 
+              brew trust lltrx/tap
               brew install --cask lltrx/tap/shelf-clipboard@beta
 
           SHA-256 of Shelf-$VERSION.zip: $SHA256
