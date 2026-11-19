@@ -131,7 +131,7 @@ struct ExportView: View {
         .padding(.horizontal, 16)
         .padding(.top, 14)
         .padding(.bottom, 12 + PopoverShape.arrowHeight)
-        .frame(width: 400, height: draft.popoverHeight, alignment: .top)
+        .frame(width: 440, height: draft.popoverHeight, alignment: .top)
         .background(PopoverShape(arrowX: model.popoverArrowX).fill(Color(nsColor: .windowBackgroundColor)))
         .overlay(PopoverShape(arrowX: model.popoverArrowX).stroke(Color.primary.opacity(0.16), lineWidth: 1))
         .task(id: estimateKey(draft)) { await updateEstimate(draft) }
@@ -188,6 +188,7 @@ struct ExportView: View {
         return Button { model.exportDraft?.scale = scale } label: {
             Text(scale == 1 ? "Original" : "\(Int(scale * 100))%")
                 .font(.system(size: 12, weight: on ? .semibold : .regular))
+                .fixedSize()   // never "O…": the row gives way elsewhere
                 .foregroundStyle(on ? Color.white : Color.primary)
                 .padding(.horizontal, 9)
                 .frame(height: 24)

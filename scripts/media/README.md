@@ -52,7 +52,8 @@ osascript -e 'tell application "System Events" to tell appearance preferences to
 
 `sandbox-on` quits Shelf, moves `~/Library/Application Support/Shelf` to `Shelf-real`, saves Shelf's
 settings to a plist and clears them (so Settings shows the defaults and screenshots don't become
-cards), then opens Shelf empty. From here on, any failure means: fix it or stop, but finish with
+cards), keeps the demo API key for an hour instead of 5 minutes (so cards don't move mid-shoot), then
+opens Shelf empty. A fresh Shelf always has one pinboard, **Pinned**. From here on, any failure means: fix it or stop, but finish with
 `sandbox-off`.
 
 Shots are taken in Light mode. If the person had Dark mode on, turn it back on at the end.
@@ -67,10 +68,14 @@ osascript -e 'tell application "TextEdit" to activate' -e 'tell application "Tex
 scripts/media/demo.sh screen     # use "visible": the area without the menu bar and the Dock
 ```
 
-Set the TextEdit window's bounds to the visible area's left edge + 8 and right edge − 8, from the top of
-the visible area + 8 down to about 330 points above its bottom (the shelf is 312 tall plus 8 of margin),
-with `osascript -e 'tell application "TextEdit" to set bounds of front window to {L, T, R, B}'`.
-In TextEdit, choose **Format → Make Rich Text** if the document is plain, so pasted formatting shows.
+Set the TextEdit window's bounds to the whole visible area (it runs behind the shelf too, so no desktop
+icons show between them), with
+`osascript -e 'tell application "TextEdit" to set bounds of front window to {L, T, R, B}'`. In TextEdit,
+choose **Format → Make Rich Text** if the document is plain, so pasted formatting shows. The first time
+an image is pasted, TextEdit asks to convert the document to RTFD: press Return (Convert).
+
+`press` and `type` only send keys while TextEdit or Shelf is in front, and stop with an error
+otherwise. Add apps for one call with `DEMO_APPS=TextEdit,Shelf,Notes scripts/media/demo.sh press …`.
 
 ### 4. Fill the shelf
 
@@ -90,24 +95,30 @@ This copies nine items, each from a fitting app (TextEdit, Notes, Terminal, Safa
 8. an order receipt image
 9. formatted meeting notes
 
-The notes end up at the front of the row. The fake key is deleted after 5 minutes: before a shot that
-should show it, copy it again with `copy-demo key notes` (so the notes stay first). Wait 5 seconds
-after the image so Shelf has read its text. Bring TextEdit back to the front afterwards
-(`osascript -e 'tell application "TextEdit" to activate'`).
+The notes end up at the front of the row; check that their card says "Formatted". The fake key
+stays for an hour in the sandbox. Wait 5 seconds after the image so Shelf has read its text. Bring
+TextEdit back to the front afterwards (`osascript -e 'tell application "TextEdit" to activate'`).
+
+The shelf always opens on the newest card, and pasting a card makes it the newest. After a paste, the
+card you want may be further along: use `press left`/`press right` and check with a screenshot.
 
 Then make a pinboard for the pinboard shot:
 
 ```sh
 scripts/media/demo.sh copy-demo snippet
-scripts/media/demo.sh press cmd+shift+v      # open the shelf; the snippet is the first card, selected
-scripts/media/demo.sh press cmd+p            # no pinboards yet: Shelf asks for a new one's name
+scripts/media/demo.sh press cmd+shift+v      # open the shelf
+scripts/media/demo.sh press cmd+n            # new pinboard: the name field gets the keys (2.0.1 and later)
 scripts/media/demo.sh type "Replies"
-scripts/media/demo.sh press return           # creates "Replies" and pins the snippet into it
+scripts/media/demo.sh press return           # creates "Replies" and shows it (empty)
+scripts/media/demo.sh press tab              # History (tabs go History → Pinned → Replies)
+scripts/media/demo.sh press cmd+p            # the snippet is selected; with two pinboards a menu opens
+scripts/media/demo.sh press 2                # 2 = Replies (1 = Pinned)
 scripts/media/demo.sh press esc
 ```
 
-Check with a quick screenshot that a "Replies" tab exists and holds the snippet. Then run
-`copy-demo key notes` so the key card is fresh and the notes are first in History.
+With Shelf 2.0.0, ⌘N leaves the keys in search: click the name field before typing. Check with a
+quick screenshot that the Replies tab holds the snippet. Then run `copy-demo notes` so the notes are
+first in History.
 
 ### 5. Screenshots
 
@@ -126,11 +137,11 @@ How to take each one:
 | File | How to get there | What it must show |
 |---|---|---|
 | `shelf.png` | `press cmd+shift+v` | The whole shelf: tabs, filter icons, search, the row of cards with the formatted notes selected (first), the 🔑 key card visible, the bottom bar with the keys and "Plain Text / Formatted" at the right. |
-| `paste-as.png` | shelf open, notes selected, `press cmd+k` | The Paste As menu with its letters, and the card it belongs to. Use `shot-rect` around the menu and the left part of the shelf. |
-| `paste-box.png` | shelf open; `press right` until the receipt is selected; `press return`; in the box `press tab` (Format), `press right` until JPEG; `press tab` (Size), `press right` (75%), `press right` (50%) | The paste box above the receipt card: name, JPEG, 50%, quality, and the "861 × 539 · … KB" result line. `shot-rect` around the box and the card. |
+| `paste-as.png` | shelf open, notes selected, `press cmd+k` | The Paste As menu with its letters, down to **Copy as File… E**, and the card it belongs to. From 2.0.1 the menu opens upward from the top of the shelf, so it's above the cards. Use `shot-rect` around the menu and the left part of the shelf. |
+| `paste-box.png` | shelf open; `press right` until the receipt is selected; `press return`; `type "Receipt"` (the name is selected, so this replaces it); `press tab` (Format), `press right` until JPEG; `press tab` (Size), `press right` (75%), `press right` (50%) | The paste box above the receipt card: "Receipt", JPEG, the Size buttons all readable (Original, 75%, 50% chosen, 25%), Quality, and the "Receipt.jpg · 900 × 560 · … KB" result line. `shot-rect` around the box and the card. |
 | `markup.png` | receipt selected, `press cmd+e` (Markup opens straight away). Then: `press a`, `press space` (arrow in the middle); move it with `press right`/`press down` (shift for big steps) until the tip, moved with `opt+right`/`opt+down`, points at "$42.00". `press t`, `press space`, `type "Due Friday"`, `press return`; move it next to the arrow. `press b`, `press space`; move the blur down over the email row with `press down`. `press esc` to let go of the selection. | The Markup editor with the arrow, the text and the blurred email; nothing selected. `shot-window`. Leave it open for the next step only if needed; `press esc` twice closes it without keeping anything. |
-| `search.png` | `press cmd+shift+v`, `type "order"` | The shelf filtered to the receipt (found by the text inside the image), the search field showing "order". |
-| `preview.png` | shelf open, receipt selected, `press space` | The large preview above the shelf showing the receipt and "Contains text". `shot-window` on the preview window. |
+| `search.png` | `press cmd+shift+v`, `type "confirmation"` | The shelf filtered to the receipt alone (found by the text inside the image), the search field showing "confirmation". ("order" also finds the snippet.) |
+| `preview.png` | shelf open, receipt selected, `press space` | The large preview above the shelf: the receipt, with the text Shelf read from it beside it. `shot-window` on the preview window. |
 | `pinboards.png` | shelf open, `press tab` to "Replies" | The Replies pinboard with the snippet card (`{{clipboard}}`, `{{date}}`). |
 | `settings.png` | shelf open, `press cmd+,` | The Settings window at the top: Shortcuts (⇧⌘V, ⌥⇧⌘V, ⇧⌘2) and the start of Pasting. `shot-window`. Close it with `press cmd+w`. |
 
@@ -153,12 +164,13 @@ scripts/media/demo.sh record X,Y,W,H 32 /tmp/shelf-shots/demo.mov &
 
 1. `press cmd+shift+v` (wait 1.2 s). The formatted notes are first: `press return`. They paste into
    TextEdit with formatting (wait 1.5 s).
-2. `press return` in TextEdit twice for space. `press cmd+shift+v`, `type "order"` (wait 1 s),
+2. `press return` in TextEdit twice for space. `press cmd+shift+v`, `type "confirmation"` (wait 1 s),
    `press cmd+e` (wait 1.2 s).
 3. `press space` (an arrow in the middle); a few `press shift+right` / `press shift+down` and
    `press opt+right` until it points at the total (wait 0.3 s between presses). `press b`,
-   `press space`, `press shift+down` once or twice over the email. `press return` (Done), then
-   `press return` (paste): the marked-up receipt lands in TextEdit (wait 1.5 s).
+   `press space`, `press shift+down` once or twice over the email. `press return` (Done). In the box,
+   `press tab` twice (Size) and `press right` three times (25%), so the receipt doesn't fill the
+   window, then `press return` (paste): the marked-up receipt lands in TextEdit (wait 1.5 s).
 4. `press cmd+shift+2`, then `drag` over a line of the pasted notes in TextEdit (screen points;
    find them with a quick screenshot first). Wait for the "Copied N words" message (2 s), then
    `press return` and `press cmd+v` in TextEdit to paste the text.
@@ -190,7 +202,7 @@ three-column table) with:
 
 | Search, even inside images | Full preview (Space) | Pinboards and snippets |
 |---|---|---|
-| ![Searching "order" finds the receipt by the text in it](docs/images/search.png) | ![The receipt in the large preview](docs/images/preview.png) | ![A Replies pinboard with a snippet using {{clipboard}} and {{date}}](docs/images/pinboards.png) |
+| ![Searching "confirmation" finds the receipt by the text in it](docs/images/search.png) | ![The receipt in the large preview](docs/images/preview.png) | ![A Replies pinboard with a snippet using {{clipboard}} and {{date}}](docs/images/pinboards.png) |
 
 ![Settings: shortcuts, paste style, history, privacy](docs/images/settings.png)
 ```
@@ -228,6 +240,17 @@ git push origin claude/epic-hopper-bt9cd0
 
 Don't push to `main` and don't run `scripts/release.sh`. Report which shots you took, the GIF's size,
 and anything that didn't work as described here.
+
+## Retaking some shots
+
+To redo only some images (for example after a Shelf update changed them), run steps 1 to 4, then
+take just those shots from step 5, shrink them, copy them into `docs/images/`, then run step 8. Commit
+with a message naming the images. The README doesn't change. Install the Shelf version you're
+shooting first (`brew upgrade --cask shelf-clipboard`) and check it in the Shelf menu.
+
+**For Shelf 2.0.1:** retake `paste-as.png` (the menu now opens upward and shows everything down to Copy
+as File) and `paste-box.png` (the Size buttons now keep their labels). Keep the same framing and
+content as the 2.0.0 shots.
 
 ## Notes
 

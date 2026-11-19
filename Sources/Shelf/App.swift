@@ -685,8 +685,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         new.representedObject = ids.map { NSNumber(value: $0) }
         new.target = self
         menu.addItem(new)
-        let width = panel.frame.width
-        menu.popUp(positioning: menu.items.first, at: NSPoint(x: width / 2 - 80, y: panelHeight - 44), in: panel.contentView)
+        popUpAboveShelf(menu)
+    }
+
+    /// Opens a menu just above the shelf, by the selected card. The shelf sits at the bottom of the
+    /// screen, so a menu opening downward from it runs off shorter screens.
+    private func popUpAboveShelf(_ menu: NSMenu) {
+        let visible = panel.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? panel.frame
+        let size = menu.size
+        let cardX = panel.frame.minX + (model.selectedCardMidX ?? panel.frame.width / 2)
+        let x = min(max(cardX - 60, visible.minX + 4), visible.maxX - size.width - 4)
+        let top = min(panel.frame.maxY - 30 + size.height, visible.maxY)   // its top left, in screen points
+        menu.popUp(positioning: nil, at: NSPoint(x: x, y: top), in: nil)
     }
 
     private func pin(_ ids: [Int64], _ board: Int64) {
@@ -856,7 +866,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
 
     /// ⌘K: every way to paste the selected card. A letter picks one while the menu is open.
     private func showPasteMenu() {
-        guard let item = model.selected, !item.concealed, let view = panel.contentView else { return }
+        guard let item = model.selected, !item.concealed else { return }
         let menu = NSMenu()
         for (i, section) in PasteOption.sections(for: item).enumerated() {
             if i > 0 { menu.addItem(.separator()) }
@@ -874,7 +884,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         asFile.representedObject = NSNumber(value: item.id)
         asFile.target = self
         menu.addItem(asFile)
-        menu.popUp(positioning: menu.items.first, at: NSPoint(x: view.bounds.midX - 100, y: panelHeight - 44), in: view)
+        popUpAboveShelf(menu)
     }
 
     private struct PasteChoice {
@@ -1035,13 +1045,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ShelfA
         popover.makeKey()
     }
 
-    /// Sizes and places the paste box: 400 points wide, or as big as fits (up to 640 × 480) while
+    /// Sizes and places the paste box: 440 points wide, or as big as fits (up to 640 × 480) while
     /// the image editor is open.
     private func layoutExportForm() {
         guard let draft = model.exportDraft, let vf = panel.screen?.visibleFrame else { return }
         let bottom = panel.frame.maxY - 4
         let size = draft.editor == nil
-            ? CGSize(width: 400, height: draft.popoverHeight)
+            ? CGSize(width: 440, height: draft.popoverHeight)
             : CGSize(width: min(640, vf.width - 16), height: max(260, min(480, vf.maxY - bottom - 8)))
         let cardX = panel.frame.minX + (model.selectedCardMidX ?? panel.frame.width / 2)
         let x = min(max(cardX - size.width / 2, vf.minX + 8), vf.maxX - size.width - 8)

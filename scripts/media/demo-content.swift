@@ -26,24 +26,37 @@ func plain(_ s: String) -> () -> Void {
     }
 }
 
-/// HTML with its plain text and RTF, as Notes or a browser would put it on the clipboard.
-func rich(_ html: String) -> () -> Void {
+/// The meeting notes as Notes puts them on the clipboard: plain text, RTF and HTML. The RTF is built
+/// directly (no HTML import, which needs WebKit and failed now and then in a command-line tool).
+func notes() -> () -> Void {
     return {
+        let body = NSFont.systemFont(ofSize: 13), bold = NSFont.boldSystemFont(ofSize: 13)
+        let text = NSMutableAttributedString()
+        func add(_ s: String, _ font: NSFont, link: String? = nil) {
+            var attributes: [NSAttributedString.Key: Any] = [.font: font]
+            if let link, let url = URL(string: link) { attributes[.link] = url }
+            text.append(NSAttributedString(string: s, attributes: attributes))
+        }
+        add("Launch notes\n", NSFont.boldSystemFont(ofSize: 16))
+        add("Shelf 2.0", bold)
+        add(" ships this week. Before then:\n", body)
+        add("\u{2022}\tRecord the demo GIF\n", body)
+        add("\u{2022}\tUpdate the ", body)
+        add("README", body, link: "https://github.com/lltrx/shelf-clipboard")
+        add("\n\u{2022}\tPost the release notes", body)
+        let html = """
+            <h3>Launch notes</h3><p><b>Shelf 2.0</b> ships this week. Before then:</p>
+            <ul><li>Record the demo GIF</li><li>Update the <a href="https://github.com/lltrx/shelf-clipboard">README</a></li>
+            <li>Post the release notes</li></ul>
+            """
         pb.clearContents()
         let item = NSPasteboardItem()
-        item.setString(html, forType: .html)
-        if let data = html.data(using: .utf8),
-           let attributed = try? NSAttributedString(
-               data: data,
-               options: [.documentType: NSAttributedString.DocumentType.html,
-                         .characterEncoding: String.Encoding.utf8.rawValue],
-               documentAttributes: nil) {
-            item.setString(attributed.string.trimmingCharacters(in: .whitespacesAndNewlines), forType: .string)
-            if let rtf = try? attributed.data(from: NSRange(location: 0, length: attributed.length),
-                                              documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]) {
-                item.setData(rtf, forType: .rtf)
-            }
+        item.setString(text.string, forType: .string)
+        if let rtf = try? text.data(from: NSRange(location: 0, length: text.length),
+                                    documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]) {
+            item.setData(rtf, forType: .rtf)
         }
+        item.setString(html, forType: .html)
         pb.writeObjects([item])
     }
 }
@@ -123,11 +136,7 @@ let items: [Item] = [
          write: plain("https://github.com/lltrx/shelf-clipboard?utm_source=newsletter&utm_medium=email&fbclid=IwAR2demo")),
     Item(name: "key", app: "Terminal", write: plain("sk-ant-api03-DEMOkeyForScreenshotsOnly0042")),
     Item(name: "image", app: "Safari", write: image()),
-    Item(name: "notes", app: "Notes", write: rich("""
-        <h3>Launch notes</h3><p><b>Shelf 2.0</b> ships this week. Before then:</p>
-        <ul><li>Record the demo GIF</li><li>Update the <a href="https://github.com/lltrx/shelf-clipboard">README</a></li>
-        <li>Post the release notes</li></ul>
-        """)),
+    Item(name: "notes", app: "Notes", write: notes()),
     // Not in the default run: pinned to a "Replies" pinboard for the pinboard shot.
     Item(name: "snippet", app: "Notes", write: plain("Hi {{clipboard}}, thanks for your order. It ships on {{date}}.")),
 ]

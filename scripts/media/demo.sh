@@ -53,7 +53,18 @@ keycode() {
   esac
 }
 
+# Keys go only to TextEdit or Shelf (or the apps in DEMO_APPS, comma-separated), so a stray press
+# never lands in a terminal or another app.
+check_front() {
+  local front; front=$(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true')
+  case ",${DEMO_APPS:-TextEdit,Shelf}," in
+    *",$front,"*) ;;
+    *) die "not sending keys: $front is in front (allowed: ${DEMO_APPS:-TextEdit,Shelf})";;
+  esac
+}
+
 press() {
+  check_front
   local combo; combo=$(echo "$1" | tr '[:upper:]' '[:lower:]')
   local key="${combo##*+}" mods="" part
   [ "$combo" = "+" ] && die "unknown key: +"
@@ -87,6 +98,7 @@ case "${1:-}" in
     # no per-app styles) and screenshots taken meanwhile don't become cards.
     if defaults export "$BUNDLE" "$PREFS" 2>/dev/null; then defaults delete "$BUNDLE" 2>/dev/null || true; fi
     defaults write "$BUNDLE" addScreenshots -bool false
+    defaults write "$BUNDLE" secretMinutes -float 60   # the demo key card stays put for the whole shoot
     open -a Shelf
     sleep 2
     echo "Sandbox on: Shelf is empty, with default settings."
@@ -116,6 +128,7 @@ case "${1:-}" in
   press) [ $# -eq 2 ] || die "usage: demo.sh press COMBO"; press "$2";;
   type)
     [ $# -eq 2 ] || die "usage: demo.sh type TEXT"
+    check_front
     osascript -e 'on run argv' -e 'tell application "System Events" to keystroke (item 1 of argv)' -e 'end run' "$2"
     ;;
   screen) tool windows --screen;;

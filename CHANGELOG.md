@@ -6,6 +6,17 @@ All notable changes to Shelf are documented here. The format is based on
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-19
+
+### Fixed
+- **Paste As (⌘K)** opens upward from the top of the shelf, next to the selected card. On shorter
+  screens it used to open downward and run off the bottom, hiding Copy as File. The pinboard menu (⌘P
+  with several pinboards) does the same.
+- **The paste box** is a little wider, so the Size buttons keep their labels (Original, 75%, 50%,
+  25%) when the Quality menu is shown instead of shrinking to "O…" and "7…".
+- **New pinboard (⌘N):** the name field gets the keyboard straight away; typing went to the search
+  field until you clicked it.
+
 ## [2.0.0] - 2026-11-18
 
 Shelf 2.0 is about what happens between copying and pasting: choose how each paste lands, change images
