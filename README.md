@@ -14,13 +14,19 @@ Press **⇧⌘V** anywhere for a row of everything you copied, and Return to pas
 - Pinboards for things you paste often, with snippets like `{{date}}`.
 - Keys, tokens and passwords are masked and deleted after a few minutes; password managers are skipped.
 
-![Shelf in action: ⇧⌘V opens the shelf over TextEdit, items are pasted, searched, previewed, and a pinboard is opened](docs/images/demo.gif)
+![Shelf 2.0: pasting formatted notes, marking up a receipt with an arrow and a blur, and grabbing text from the screen](docs/images/demo.gif)
 
-![Shelf open at the bottom of the screen, showing recent copies: a link, code, an image, notes, Arabic text, and files](docs/images/shelf.png)
+![The shelf at the bottom of the screen: formatted notes, a receipt image, a cleaned link, code, a color, Arabic text, JSON and a masked API key](docs/images/shelf.png)
 
-| Search everything you copied | Full preview (Space) | Pinboards |
+| Paste As (⌘K) | The paste box (Return on an image) | Markup (⌘E) |
 |---|---|---|
-| ![Searching for "swift"](docs/images/search.png) | ![Previewing a copied image](docs/images/preview.png) | ![The Snippets pinboard](docs/images/pinboards.png) |
+| ![The Paste As menu: with formatting, plain text, Markdown, and text changes](docs/images/paste-as.png) | ![Converting the receipt to a JPEG at half size before pasting](docs/images/paste-box.png) | ![An arrow, a label and a blurred email on the receipt](docs/images/markup.png) |
+
+| Search, even inside images | Full preview (Space) | Pinboards and snippets |
+|---|---|---|
+| ![Searching "confirmation" finds the receipt by the text in it](docs/images/search.png) | ![The receipt in the large preview](docs/images/preview.png) | ![A Replies pinboard with a snippet using {{clipboard}} and {{date}}](docs/images/pinboards.png) |
+
+![Settings: shortcuts, paste style, history, privacy](docs/images/settings.png)
 
 - [User guide](docs/USER_GUIDE.md): every feature and shortcut
 - [Install guide](docs/INSTALL.md): for other people, including updating and uninstalling
